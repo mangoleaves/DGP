@@ -30,6 +30,8 @@ void MainViewerWidget::CreateParamWidget(void)
 {
 	meshparamwidget = new MeshParamWidget();
 	connect(meshparamwidget, SIGNAL(PrintInfoSignal()), meshviewerwidget, SLOT(PrintMeshInfo()));
+	connect(meshparamwidget, SIGNAL(FindShortestPathSignal()), this, SLOT(ShowShortestPath()));
+	connect(meshparamwidget, SIGNAL(FindMSTSignal()), this, SLOT(ShowMST()));
 }
 
 void MainViewerWidget::CreateViewerDialog(void)
@@ -143,6 +145,44 @@ void MainViewerWidget::ShowFlat(void)
 void MainViewerWidget::ShowSmooth(void)
 {
 	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::SMOOTH);
+}
+
+void MainViewerWidget::ShowShortestPath(void)
+{
+	int beginIdx, endIdx;
+	try
+	{
+		beginIdx = (meshparamwidget->getBeginIdx()).toInt();
+		endIdx = (meshparamwidget->getEndIdx()).toInt();
+	}
+	catch (const std::exception& x)
+	{
+		std::cerr << x.what() << std::endl;
+		return;
+	}
+	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::SHORTESTPATH, beginIdx, endIdx);
+}
+
+void MainViewerWidget::ShowMST(void)
+{
+	// ∂¡»Î∂•µ„
+	std::stringstream	sin;
+	std::vector<int>	vertexIdxs;
+	int					vertexIdx;
+
+	try {
+		sin.str(meshparamwidget->getVertexIdxs().toStdString());
+		while (sin >> vertexIdx)
+		{
+			vertexIdxs.push_back(vertexIdx);
+		}
+	}
+	catch (const std::exception& x)
+	{
+		std::cerr << x.what() << std::endl;
+		return;
+	}
+	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::MST, vertexIdxs);
 }
 
 void MainViewerWidget::Lighting(bool b)

@@ -22,6 +22,9 @@ public:
 	void ViewCenter(void);
 	void CopyRotation(void);
 	void LoadRotation(void);
+	void SetDrawMode(const DrawMode& dm);
+	void SetDrawMode(const DrawMode& dm, int beginIdx, int endIdx);
+	void SetDrawMode(const DrawMode& dm, std::vector<int> vIdxs);
 signals:
 	void LoadMeshOKSignal(bool, QString);
 public slots:
@@ -37,10 +40,19 @@ private:
 	void DrawFlatLines(void) const;
 	void DrawFlat(void) const;
 	void DrawSmooth(void) const;
+	void DrawShortestPath(void);
+	void DrawMST(void);
 	void DrawBoundingBox(void) const;
 	void DrawBoundary(void) const;
 protected:
 	Mesh mesh;
+	// Shortest Path
+	std::vector<OpenMesh::VertexHandle>* path;
+	int beginIndex, endIndex;
+	// MST
+	std::vector<int> vertexIdxs;
+	std::vector<std::pair<OpenMesh::VertexHandle, OpenMesh::VertexHandle>> mstEdges;
+
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;

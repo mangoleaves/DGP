@@ -394,3 +394,188 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 		mesh2.add_face(vhs);
 	}
 }
+
+
+/* 比较两点相距起点的距离 */
+struct cmp {
+	OpenMesh::PropertyManager<OpenMesh::VPropHandleT<double>, int> dis;
+
+	bool operator()(OpenMesh::VertexHandle a, OpenMesh::VertexHandle b)
+	{
+		return dis[a] > dis[b];
+	}
+
+	cmp(OpenMesh::PropertyManager<OpenMesh::VPropHandleT<double>, int> d) :dis(d) {}
+};
+
+// 使用Dijkstra算法寻找两点间的最短路径
+// 输入：网格mesh，起始顶点的索引beginIndex，终止顶点的索引endIndex
+// 输出：寻找成功则返回包含路径和距离的结构体，失败则返回空结构体
+MeshTools::ShortestPath MeshTools::FindShortestPath(Mesh& mesh, int beginIndex, int endIndex)
+{
+	auto path = new std::vector<OpenMesh::VertexHandle>;
+	OpenMesh::VertexHandle beginVHandle, endVHandle;
+
+	// 尝试获取起点和终点的VHandle
+	try
+	{
+		beginVHandle = mesh.vertex_handle(beginIndex);
+		endVHandle = mesh.vertex_handle(endIndex);
+	}
+	catch (const std::exception& x)
+	{
+		std::cerr << x.what() << std::endl;
+		return ShortestPath();
+	}
+
+	{
+		// dis：某点相距起点的距离； lastVertex：某点在最短路径上的上一个点； vQueue：以dis为序的队列
+		auto dis = OpenMesh::makeTemporaryProperty<OpenMesh::VertexHandle, double>(mesh);
+		auto lastVertex = OpenMesh::makeTemporaryProperty<OpenMesh::VertexHandle, OpenMesh::VertexHandle>(mesh);
+		cmp cmpObj(dis);
+		std::vector<OpenMesh::VertexHandle> vQueue;
+		// 初始化
+		for (auto viter : mesh.vertices())
+		{
+			dis[viter] = INFINITY;
+		}
+		dis[beginVHandle] = 0.0;
+		vQueue.push_back(beginVHandle);
+		// Dijkstra算法循环部分
+		while (!vQueue.empty() && vQueue.front() != endVHandle)
+		{
+			auto vh = vQueue.front();
+			vQueue.erase(vQueue.begin());
+
+			for (auto vohIter = mesh.voh_begin(vh); vohIter.is_valid(); vohIter++)
+			{
+				double length = mesh.calc_edge_length(*vohIter);
+				auto toVertex = mesh.to_vertex_handle(*vohIter);
+				if (dis[vh] + length < dis[toVertex])
+				{
+					if (dis[toVertex] == INFINITY)
+					{
+						vQueue.push_back(toVertex);
+					}
+					lastVertex[toVertex] = vh;
+					dis[toVertex] = dis[vh] + length;
+				}
+			}
+			std::sort(vQueue.begin(), vQueue.end(), cmpObj);
+		}
+		// 返回结果
+		if (!vQueue.empty())
+		{
+			for (auto vh = endVHandle; vh != beginVHandle; vh = lastVertex[vh])
+			{
+				path->push_back(vh);
+
+			}
+			path->push_back(beginVHandle);
+			return ShortestPath(path,dis[endVHandle]);
+		}
+		else
+		{
+			std::cout << "Not found." << std::endl;
+			return ShortestPath();
+		}
+	}
+}
+
+// 近似最小生成树算法
+// 输入：网格mesh，顶点索引数组vertexIdxs
+// 输出：最小生成树的边数组，边以<vertex index, vertex index>的形式表示。失败时返回空数组。
+MeshTools::edges MeshTools::FindMST(Mesh& mesh, std::vector<int> vertexIdxs)
+{
+	edges mstEdges;
+	// 计算两点之间的最短距离和路径，存入完全图矩阵
+	std::vector<std::vector<ShortestPath>> disGraph;
+	disGraph.resize(vertexIdxs.size());
+
+	for (int i = 0; i < vertexIdxs.size(); i++)
+	{
+		disGraph[i].resize(vertexIdxs.size());
+		for (int j = 0; j < vertexIdxs.size(); j++)
+		{
+			if (i == j)
+			{
+				disGraph[i][j] = ShortestPath();
+			}
+			else
+			{
+				auto sp = MeshTools::FindShortestPath(mesh, vertexIdxs[i], vertexIdxs[j]);
+				if (!sp.path)
+				{
+					std::cerr << "There is no path between vertex " << vertexIdxs[i] << " and " << vertexIdxs[j] << std::endl;
+					return mstEdges;
+				}
+				disGraph[i][j] = sp;
+			}
+		}
+	}
+	// 计算完全图上的最小生成树，使用Prim算法
+	std::vector<bool> isInTree(vertexIdxs.size(), false);
+	int nodeCnt = 0;
+	typedef std::pair<int, int> idxPair;
+	std::vector<idxPair> treeEdges;
+	// 初始化，加入第一个点
+	isInTree[0] = true;
+	nodeCnt++;
+	while (nodeCnt < vertexIdxs.size())
+	{
+		// 暴力寻找最小的边，该边连接树中的结点和树外的结点
+		double minDis = INFINITY;
+		std::pair<int, int> minEdge;
+		for (int i = 0; i < vertexIdxs.size(); i++)
+		{
+			if (isInTree[i])
+			{
+				for (int j = i + 1; j < vertexIdxs.size(); j++)
+				{
+					if (!isInTree[j])
+					{
+						if (disGraph[i][j].distance < minDis)
+						{
+							minDis = disGraph[i][j].distance;
+							minEdge = idxPair(i, j);
+						}
+					}
+				}
+			}
+		}
+		treeEdges.push_back(minEdge);
+		isInTree[minEdge.second] = true;
+		nodeCnt++;
+	}
+	// 将完全图中的边转为原图中的边
+	typedef std::pair<OpenMesh::VertexHandle, OpenMesh::VertexHandle> vhPair;
+	for (auto& item : treeEdges)
+	{
+		auto path = disGraph[item.first][item.second].path;
+		for (auto vhIter = path->begin(); vhIter + 1 != path->end(); vhIter++)
+		{
+			mstEdges.push_back(vhPair(*vhIter, *(vhIter + 1)));
+		}
+	}
+	// 删除重复边
+	for (auto vhPairIter = mstEdges.begin(); vhPairIter != mstEdges.end();)
+	{
+		auto it = std::find(mstEdges.begin(), vhPairIter, *vhPairIter);
+		if (it != vhPairIter)
+		{
+			vhPairIter = mstEdges.erase(vhPairIter);
+		}
+		else
+		{
+			vhPairIter++;
+		}
+	}
+	// 计算总长
+	double disSum = 0;
+	for (auto vhPairIter : mstEdges)
+	{
+		disSum += mesh.calc_edge_length(mesh.find_halfedge(vhPairIter.first, vhPairIter.second));
+	}
+	std::cout << "Total length is " << disSum << std::endl;
+	return mstEdges;
+}

@@ -32,6 +32,8 @@ protected:
 	void ShowFlatLines(void);
 	void ShowFlat(void);
 	void ShowSmooth(void);
+	void ShowShortestPath(void);
+	void ShowMST(void);
 	void Lighting(bool b);
 	void DoubleSideLighting(bool b);
 	void ShowBoundingBox(bool b);

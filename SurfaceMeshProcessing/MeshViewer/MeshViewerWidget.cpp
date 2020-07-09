@@ -4,6 +4,7 @@
 
 MeshViewerWidget::MeshViewerWidget(QWidget* parent)
 	: QGLViewerWidget(parent),
+	path(NULL),
 	ptMin(0.0),
 	ptMax(0.0),
 	isEnableLighting(true),
@@ -141,6 +142,29 @@ void MeshViewerWidget::LoadRotation(void)
 	update();
 }
 
+void MeshViewerWidget::SetDrawMode(const DrawMode& dm)
+{
+	drawmode = dm;
+	update();
+}
+
+void MeshViewerWidget::SetDrawMode(const DrawMode& dm, int beginIdx, int endIdx)
+{
+	drawmode = dm;
+	beginIndex = beginIdx;
+	endIndex = endIdx;
+	path = MeshTools::FindShortestPath(mesh, beginIndex, endIndex).path;
+	update();
+}
+
+void MeshViewerWidget::SetDrawMode(const DrawMode& dm, std::vector<int> vIdxs)
+{
+	drawmode = dm;
+	vertexIdxs = vIdxs;
+	mstEdges = MeshTools::FindMST(mesh, vertexIdxs);
+	update();
+}
+
 void MeshViewerWidget::PrintMeshInfo(void)
 {
 	std::cout << "Mesh Info:\n";
@@ -192,6 +216,12 @@ void MeshViewerWidget::DrawSceneMesh(void)
 	case SMOOTH:
 		DrawSmooth();
 		break;
+	case SHORTESTPATH:
+		DrawShortestPath();
+		break;
+	case MST:
+		DrawMST();
+		break;
 	default:
 		break;
 	}
@@ -212,6 +242,7 @@ void MeshViewerWidget::DrawPoints(void) const
 
 void MeshViewerWidget::DrawWireframe(void) const
 {
+	glLineWidth(1.0);
 	glColor3d(0.2, 0.2, 0.2);
 	glBegin(GL_LINES);
 	for (const auto& eh : mesh.edges())
@@ -307,6 +338,67 @@ void MeshViewerWidget::DrawSmooth(void) const
 	}
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
+}
+
+void MeshViewerWidget::DrawShortestPath(void)
+{
+	glLineWidth(1.0);
+	glColor3d(0.2, 0.2, 0.2);
+	glBegin(GL_LINES);
+	for (const auto& eh : mesh.edges())
+	{
+		auto heh = mesh.halfedge_handle(eh, 0);
+		auto vh0 = mesh.from_vertex_handle(heh);
+		auto vh1 = mesh.to_vertex_handle(heh);
+		glNormal3dv(mesh.normal(vh0).data());
+		glVertex3dv(mesh.point(vh0).data());
+		glNormal3dv(mesh.normal(vh1).data());
+		glVertex3dv(mesh.point(vh1).data());
+	}
+	glEnd();
+	if (path) {
+		glLineWidth(3.0);
+		glColor3d(0.0, 1.0, 0.5);
+		glBegin(GL_LINES);
+		for (auto vh = path->begin(); vh + 1 != path->end(); vh++)
+		{
+			glNormal3dv(mesh.normal(*vh).data());
+			glVertex3dv(mesh.point(*vh).data());
+			glNormal3dv(mesh.normal(*(vh + 1)).data());
+			glVertex3dv(mesh.point(*(vh + 1)).data());
+		}
+		glEnd();
+	}
+}
+
+void MeshViewerWidget::DrawMST(void)
+{
+	glLineWidth(1.0);
+	glColor3d(0.2, 0.2, 0.2);
+	glBegin(GL_LINES);
+	for (const auto& eh : mesh.edges())
+	{
+		auto heh = mesh.halfedge_handle(eh, 0);
+		auto vh0 = mesh.from_vertex_handle(heh);
+		auto vh1 = mesh.to_vertex_handle(heh);
+		glNormal3dv(mesh.normal(vh0).data());
+		glVertex3dv(mesh.point(vh0).data());
+		glNormal3dv(mesh.normal(vh1).data());
+		glVertex3dv(mesh.point(vh1).data());
+	}
+	glEnd();
+
+	glLineWidth(3.0);
+	glColor3d(0.0, 1.0, 0.5);
+	glBegin(GL_LINES);
+	for (auto edge : mstEdges)
+	{
+		glNormal3dv(mesh.normal(edge.first).data());
+		glVertex3dv(mesh.point(edge.first).data());
+		glNormal3dv(mesh.normal(edge.second).data());
+		glVertex3dv(mesh.point(edge.second).data());
+	}
+	glEnd();
 }
 
 void MeshViewerWidget::DrawBoundingBox(void) const
