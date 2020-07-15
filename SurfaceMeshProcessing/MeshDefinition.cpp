@@ -394,3 +394,168 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 		mesh2.add_face(vhs);
 	}
 }
+
+Mesh::Point MeshTools::CircumCenter(Mesh& mesh, OpenMesh::FaceHandle faceHandle)
+{
+	// 获取面的三个顶点
+	std::vector<Mesh::Point> X;
+	for (auto fvIter = mesh.fv_begin(faceHandle); fvIter.is_valid(); fvIter++)
+	{
+		X.push_back(mesh.point(*fvIter));
+	}
+	// 计算面的法向量
+	auto n = mesh.calc_face_normal(faceHandle);
+	// 构造线性方程组，计算外心
+	Eigen::Matrix3d A;
+	Eigen::Vector3d b;
+	A << 2 * (X[1].data()[0] - X[0].data()[0]), 2 * (X[1].data()[1] - X[0].data()[1]), 2 * (X[1].data()[2] - X[0].data()[2]),
+		2 * (X[2].data()[0] - X[0].data()[0]), 2 * (X[2].data()[1] - X[0].data()[1]), 2 * (X[2].data()[2] - X[0].data()[2]),
+		n.data()[0], n.data()[1], n.data()[2];
+	b << pow(X[1].data()[0], 2) + pow(X[1].data()[1], 2) + pow(X[1].data()[2], 2) - pow(X[0].data()[0], 2) - pow(X[0].data()[1], 2) - pow(X[0].data()[2], 2),
+		pow(X[2].data()[0], 2) + pow(X[2].data()[1], 2) + pow(X[2].data()[2], 2) - pow(X[0].data()[0], 2) - pow(X[0].data()[1], 2) - pow(X[0].data()[2], 2),
+		n.data()[0] * X[0].data()[0] + n.data()[1] * X[0].data()[1] + n.data()[2] * X[0].data()[2];
+
+	Eigen::Vector3d cc = A.colPivHouseholderQr().solve(b);
+	return Mesh::Point(cc.x(), cc.y(), cc.z());
+	
+}
+
+void MeshTools::LocalAveragingRegion(Mesh& mesh)
+{
+	try
+	{
+		auto vertexLAR = OpenMesh::getProperty<OpenMesh::VertexHandle, double>(mesh, "vertexLAR");
+		for (auto vHandle : mesh.vertices())
+		{
+			vertexLAR[vHandle] = 0.0;
+		}
+
+		for (auto faceHandle : mesh.faces())
+		{
+			// 判断是否是钝角三角形
+			bool isObtuseAngle = false;
+			OpenMesh::VertexHandle obtuseVertexHandle;
+			for (auto fhIter = mesh.fh_begin(faceHandle); fhIter.is_valid(); fhIter++)
+			{
+				auto angle = mesh.calc_sector_angle(*fhIter);
+				if (angle > M_PI / 2)
+				{
+					isObtuseAngle = true;
+					obtuseVertexHandle = mesh.to_vertex_handle(*fhIter);
+					break;
+				}
+			}
+			// 计算面积
+			if (isObtuseAngle)
+			{
+				double faceArea = mesh.calc_face_area(faceHandle);
+				for (auto fvIter = mesh.fv_begin(faceHandle); fvIter.is_valid(); fvIter++)
+				{
+					if (*fvIter == obtuseVertexHandle)
+					{
+						vertexLAR[*fvIter] += faceArea / 2;
+					}
+					else
+					{
+						vertexLAR[*fvIter] += faceArea / 4;
+					}
+				}
+			}
+			else
+			{
+				auto cc = CircumCenter(mesh, faceHandle);
+				for (auto fhIter = mesh.fh_begin(faceHandle); fhIter.is_valid(); fhIter++)
+				{
+					auto edgeMidpoint = mesh.calc_edge_midpoint(*fhIter);
+					auto edgeLength = mesh.calc_edge_length(*fhIter);
+					double partArea = 0.5 * edgeLength * (edgeMidpoint - cc).norm();
+					vertexLAR[mesh.to_vertex_handle(*fhIter)] += 0.5 * partArea;
+					vertexLAR[mesh.from_vertex_handle(*fhIter)] += 0.5 * partArea;
+				}
+			}
+		}
+	}
+	catch (const std::exception& x)
+	{
+		std::cout << x.what() << std::endl;
+		return;
+	}
+}
+
+void MeshTools::MeanCurvature(Mesh& mesh)
+{
+	try
+	{
+		auto meanCurvature = OpenMesh::getProperty<OpenMesh::VertexHandle, OpenMesh::Vec3d>(mesh, "meanCurvature");
+		auto vertexLAR = OpenMesh::getProperty<OpenMesh::VertexHandle, double>(mesh, "vertexLAR");
+		for (auto vHandle : mesh.vertices())
+		{
+			meanCurvature[vHandle] = OpenMesh::Vec3d(0, 0, 0);
+			for (auto vvIter = mesh.vv_begin(vHandle); vvIter.is_valid(); vvIter++)
+			{
+				auto firstHalfedgeHandle = mesh.find_halfedge(vHandle, *vvIter);
+				auto nextHalfedgeHandle = firstHalfedgeHandle.next();
+
+				double firstAngle = mesh.calc_sector_angle(firstHalfedgeHandle);
+				double nextAngle = mesh.calc_sector_angle(nextHalfedgeHandle);
+
+				auto firstVertexHandle = mesh.to_vertex_handle(firstHalfedgeHandle);
+				auto nextVertexHandle = mesh.to_vertex_handle(nextHalfedgeHandle);
+
+				meanCurvature[vHandle] += OpenMesh::Vec3d(mesh.point(nextVertexHandle) - mesh.point(vHandle)) / tan(firstAngle);
+				meanCurvature[vHandle] += OpenMesh::Vec3d(mesh.point(firstVertexHandle) - mesh.point(vHandle)) / tan(nextAngle);
+			}
+			meanCurvature[vHandle] /= 4 * vertexLAR[vHandle];
+		}
+	}
+	catch (const std::exception& x)
+	{
+		std::cout << x.what() << std::endl;
+		return;
+	}
+}
+
+void MeshTools::AbsoluteMeanCurvature(Mesh& mesh)
+{
+	try
+	{
+		auto meanCurvature = OpenMesh::getProperty<OpenMesh::VertexHandle, OpenMesh::Vec3d>(mesh, "meanCurvature");
+		auto absoluteMeanCurvature = OpenMesh::getProperty<OpenMesh::VertexHandle, double>(mesh, "absoluteMeanCurvature");
+		for (auto vHandle : mesh.vertices())
+		{
+			absoluteMeanCurvature[vHandle] = meanCurvature[vHandle].norm();
+		}
+	}
+	catch (const std::exception& x)
+	{
+		std::cout << x.what() << std::endl;
+		return;
+	}
+}
+
+void MeshTools::GaussianCurvature(Mesh& mesh)
+{
+	try
+	{
+		auto vertexLAR = OpenMesh::getProperty<OpenMesh::VertexHandle, double>(mesh, "vertexLAR");
+		auto gaussianCurvature = OpenMesh::getProperty<OpenMesh::VertexHandle, double>(mesh, "gaussianCurvature");
+
+		for (auto vHandle : mesh.vertices())
+		{
+			gaussianCurvature[vHandle] = 2 * M_PI;
+			for (auto vvIter = mesh.vv_iter(vHandle); vvIter.is_valid(); vvIter++)
+			{
+				auto outHalfedgeHandle = mesh.find_halfedge(vHandle, *vvIter);
+				auto inHalfedgeHandle = outHalfedgeHandle.next().next();
+				double theta = mesh.calc_sector_angle(inHalfedgeHandle);
+				gaussianCurvature[vHandle] -= theta;
+			}
+			gaussianCurvature[vHandle] /= vertexLAR[vHandle];
+		}
+	}
+	catch (const std::exception& x)
+	{
+		std::cout << x.what() << std::endl;
+	}
+}
+

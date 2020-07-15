@@ -1,5 +1,9 @@
 #pragma once
+#include <cmath>
+#include <vector>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include <OpenMesh/Core/Utils/PropertyManager.hh>
+#include <Eigen/Dense>
 #ifdef _DEBUG
 #pragma comment(lib, "OpenMeshCored.lib")
 #pragma comment(lib, "OpenMeshToolsd.lib")
@@ -33,4 +37,9 @@ public:
 	static int Genus(const Mesh & mesh);
 	static void BoundingBox(const Mesh & mesh, Mesh::Point & bmax, Mesh::Point & bmin);
 	static void Reassign(const Mesh & mesh1, Mesh & mesh2);
+	static Mesh::Point CircumCenter(Mesh& mesh, OpenMesh::FaceHandle faceHandle);
+	static void LocalAveragingRegion(Mesh& mesh);
+	static void MeanCurvature(Mesh& mesh);
+	static void AbsoluteMeanCurvature(Mesh& mesh);
+	static void GaussianCurvature(Mesh& mesh);
 };

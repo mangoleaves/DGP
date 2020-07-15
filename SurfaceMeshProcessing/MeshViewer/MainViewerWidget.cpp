@@ -30,6 +30,9 @@ void MainViewerWidget::CreateParamWidget(void)
 {
 	meshparamwidget = new MeshParamWidget();
 	connect(meshparamwidget, SIGNAL(PrintInfoSignal()), meshviewerwidget, SLOT(PrintMeshInfo()));
+	connect(meshparamwidget, SIGNAL(ShowMC()), this, SLOT(ShowMC()));
+	connect(meshparamwidget, SIGNAL(ShowAMC()), this, SLOT(ShowAMC()));
+	connect(meshparamwidget, SIGNAL(ShowGC()), this, SLOT(ShowGC()));
 }
 
 void MainViewerWidget::CreateViewerDialog(void)
@@ -143,6 +146,21 @@ void MainViewerWidget::ShowFlat(void)
 void MainViewerWidget::ShowSmooth(void)
 {
 	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::SMOOTH);
+}
+
+void MainViewerWidget::ShowMC(void)
+{
+	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::MC);
+}
+
+void MainViewerWidget::ShowAMC(void)
+{
+	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::AMC);
+}
+
+void MainViewerWidget::ShowGC(void)
+{
+	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::GC);
 }
 
 void MainViewerWidget::Lighting(bool b)

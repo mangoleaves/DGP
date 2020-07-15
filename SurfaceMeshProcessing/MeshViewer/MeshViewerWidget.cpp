@@ -28,6 +28,13 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		QFileInfo fi(strMeshFileName);
 		strMeshPath = fi.path();
 		strMeshBaseName = fi.baseName();
+		hasCalcLAR = false;
+		hasCalcGaussianCurvature = false;
+		hasCalcAbsoluteMeanCurvature = false;
+		hasCalcMeanCurvature = false;
+		hasCalcAMCColor = false;
+		hasCalcMCColor = false;
+		hasCalcGCColor = false;
 		UpdateMesh();
 		update();
 		return true;
@@ -192,6 +199,15 @@ void MeshViewerWidget::DrawSceneMesh(void)
 	case SMOOTH:
 		DrawSmooth();
 		break;
+	case MC:
+		DrawMeanCurvature();
+		break;
+	case AMC:
+		DrawAbsoluteMeanCurvature();
+		break;
+	case GC:
+		DrawGaussianCurvature();
+		break;
 	default:
 		break;
 	}
@@ -307,6 +323,192 @@ void MeshViewerWidget::DrawSmooth(void) const
 	}
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
+}
+
+void MeshViewerWidget::DrawMeanCurvature(void)
+{
+	OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, double>(mesh, "vertexLAR");
+	auto meanCurvature = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, OpenMesh::Vec3d>(mesh, "meanCurvature");
+	auto vertexMCColor = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, OpenMesh::Vec3d>(mesh, "vertexMCColor");
+
+	if (!hasCalcLAR)
+	{
+		MeshTools::LocalAveragingRegion(mesh);
+		hasCalcLAR = true;
+	}
+	if (!hasCalcMeanCurvature)
+	{
+		MeshTools::MeanCurvature(mesh);
+		hasCalcMeanCurvature = true;
+	}
+
+	static double mean = 0, var = 0, std_var = 0;
+	static double s2 = 0, s1 = 0;
+	static double maxV = 0, minV = 0;
+
+	if (!hasCalcMCColor)
+	{
+		s2 = 0;
+		s1 = 0;
+		for (auto vh:mesh.vertices())
+		{
+			double signedCurvatureNorm = (meanCurvature[vh] | mesh.normal(vh)) > 0 ? meanCurvature[vh].norm() : -meanCurvature[vh].norm();
+			s2 += pow(signedCurvatureNorm, 2);
+			s1 += signedCurvatureNorm;
+		}
+		mean = s1 / mesh.n_vertices();
+		var = s2 / mesh.n_vertices() - pow(mean, 2);
+		std_var = sqrt(var);
+		minV = mean - std_var;
+		maxV = mean + std_var;
+		ColorMap colorMap(maxV, minV);
+		for (auto vh : mesh.vertices())
+		{
+			double signedCurvatureNorm = (meanCurvature[vh] | mesh.normal(vh)) > 0 ? meanCurvature[vh].norm() : -meanCurvature[vh].norm();
+			vertexMCColor[vh] = colorMap.MapToColor(signedCurvatureNorm);
+		}
+		hasCalcMCColor = true;
+		std::cout << "mean:" << mean << "std var" << std_var << std::endl;
+		std::cout << "minV:" << minV << "  maxV:" << maxV << std::endl;
+	}
+
+
+	glShadeModel(GL_SMOOTH);
+	for (const auto& fh : mesh.faces())
+	{
+		glBegin(GL_POLYGON);
+		for (const auto& fvh : mesh.fv_range(fh))
+		{
+			glColor3dv(vertexMCColor[fvh].data());
+			glNormal3dv(mesh.normal(fvh).data());
+			glVertex3dv(mesh.point(fvh).data());
+		}
+		glEnd();
+	}
+}
+
+void MeshViewerWidget::DrawAbsoluteMeanCurvature(void)
+{
+	OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, double>(mesh, "vertexLAR");
+	OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, OpenMesh::Vec3d>(mesh, "meanCurvature");
+	auto absoluteMeanCurvature = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, double>(mesh, "absoluteMeanCurvature");
+	auto vertexAMCColor = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, OpenMesh::Vec3d>(mesh, "vertexAMCColor");
+
+	if (!hasCalcLAR)
+	{
+		MeshTools::LocalAveragingRegion(mesh);
+		hasCalcLAR = true;
+	}
+	if (!hasCalcMeanCurvature)
+	{
+		MeshTools::MeanCurvature(mesh);
+		hasCalcMeanCurvature = true;
+	}
+	if (!hasCalcAbsoluteMeanCurvature)
+	{
+		MeshTools::AbsoluteMeanCurvature(mesh);
+		hasCalcAbsoluteMeanCurvature = true;
+	}
+
+	static double mean = 0, var = 0, std_var = 0;
+	static double s2 = 0, s1 = 0;
+	static double maxV = 0, minV = 0;
+
+	if (!hasCalcAMCColor)
+	{
+		s2 = 0;
+		s1 = 0;
+		for (auto vIter = mesh.vertices_begin(); vIter != mesh.vertices_end(); vIter++)
+		{
+			s2 += pow(absoluteMeanCurvature[*vIter], 2);
+			s1 += absoluteMeanCurvature[*vIter];
+		}
+		mean = s1 / mesh.n_vertices();
+		var = s2 / mesh.n_vertices() - pow(mean, 2);
+		std_var = sqrt(var);
+		minV = mean - std_var > 0 ? mean - std_var : 0;
+		maxV = mean + std_var;
+
+		ColorMap colorMap(maxV, minV);
+		for (auto vh : mesh.vertices())
+		{
+			vertexAMCColor[vh] = colorMap.MapToColor(absoluteMeanCurvature[vh]);
+		}
+		hasCalcAMCColor = true;
+	}
+
+
+	glShadeModel(GL_SMOOTH);
+	for (const auto& fh : mesh.faces())
+	{
+		glBegin(GL_POLYGON);
+		for (const auto& fvh : mesh.fv_range(fh))
+		{
+			glColor3dv(vertexAMCColor[fvh].data());
+			glNormal3dv(mesh.normal(fvh).data());
+			glVertex3dv(mesh.point(fvh).data());
+		}
+		glEnd();
+	}
+}
+
+void MeshViewerWidget::DrawGaussianCurvature(void)
+{
+	OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, double>(mesh, "vertexLAR");
+	auto gaussianCurvature = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, double>(mesh, "gaussianCurvature");
+	auto vertexGCColor = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, OpenMesh::Vec3d>(mesh, "vertexGCColor");
+
+	if (!hasCalcLAR)
+	{
+		MeshTools::LocalAveragingRegion(mesh);
+		hasCalcLAR = true;
+	}
+	if (!hasCalcGaussianCurvature)
+	{
+		MeshTools::GaussianCurvature(mesh);
+		hasCalcGaussianCurvature = true;
+	}
+
+	static double mean = 0, var = 0, std_var = 0;
+	static double s2 = 0, s1 = 0;
+	static double maxV = 0, minV = 0;
+
+	if (!hasCalcGCColor)
+	{
+		s2 = 0;
+		s1 = 0;
+		for (auto vIter = mesh.vertices_begin(); vIter != mesh.vertices_end(); vIter++)
+		{
+			s2 += pow(gaussianCurvature[*vIter], 2);
+			s1 += gaussianCurvature[*vIter];
+		}
+		mean = s1 / mesh.n_vertices();
+		var = s2 / mesh.n_vertices() - pow(mean, 2);
+		std_var = sqrt(var);
+		minV = mean - std_var;
+		maxV = mean + std_var;
+
+		ColorMap colorMap(maxV, minV);
+		for (auto vh : mesh.vertices())
+		{
+			vertexGCColor[vh] = colorMap.MapToColor(gaussianCurvature[vh]);
+		}
+		hasCalcGCColor = true;
+	}
+
+
+	glShadeModel(GL_SMOOTH);
+	for (const auto& fh : mesh.faces())
+	{
+		glBegin(GL_POLYGON);
+		for (const auto& fvh : mesh.fv_range(fh))
+		{
+			glColor3dv(vertexGCColor[fvh].data());
+			glNormal3dv(mesh.normal(fvh).data());
+			glVertex3dv(mesh.point(fvh).data());
+		}
+		glEnd();
+	}
 }
 
 void MeshViewerWidget::DrawBoundingBox(void) const

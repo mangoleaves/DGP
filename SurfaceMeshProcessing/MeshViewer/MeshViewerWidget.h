@@ -2,6 +2,7 @@
 #include <QString>
 #include "QGLViewerWidget.h"
 #include "MeshDefinition.h"
+#include "ColorMap.h"
 
 class MeshViewerWidget : public QGLViewerWidget
 {
@@ -37,10 +38,20 @@ private:
 	void DrawFlatLines(void) const;
 	void DrawFlat(void) const;
 	void DrawSmooth(void) const;
+	void DrawMeanCurvature(void);
+	void DrawAbsoluteMeanCurvature(void);
+	void DrawGaussianCurvature(void);
 	void DrawBoundingBox(void) const;
 	void DrawBoundary(void) const;
 protected:
 	Mesh mesh;
+	bool hasCalcLAR;
+	bool hasCalcMeanCurvature;
+	bool hasCalcAbsoluteMeanCurvature;
+	bool hasCalcGaussianCurvature;
+	bool hasCalcMCColor;
+	bool hasCalcAMCColor;
+	bool hasCalcGCColor;
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;
