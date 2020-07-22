@@ -559,3 +559,183 @@ void MeshTools::GaussianCurvature(Mesh& mesh)
 	}
 }
 
+double MeshTools::BoxMuller(double mu, double sigma)
+{
+	double u1 = (double)rand() / RAND_MAX;
+	double u2 = (double)rand() / RAND_MAX;
+	double z = sqrt(-2 * log(u1)) * sin(2 * M_PI * u2);
+	return mu + z * sigma;
+}
+
+void MeshTools::GaussianNoise(Mesh& mesh, double proportion)
+{
+	if (mesh.vertices_empty())
+	{
+		return;
+	}
+
+	srand(time(NULL));
+
+	double sumEdgeLength = 0.0;
+	double avgEdgeLength = 0.0;
+
+	for (auto eh : mesh.edges())
+	{
+		sumEdgeLength += mesh.calc_edge_length(eh);
+	}
+	avgEdgeLength = sumEdgeLength / mesh.n_edges();
+
+	double mu = 0.0;
+	double sigma = avgEdgeLength * proportion;
+
+	for (auto vh : mesh.vertices())
+	{
+		auto vp = mesh.point(vh);
+		double dx = BoxMuller(mu, sigma);
+		double dy = BoxMuller(mu, sigma);
+		double dz = BoxMuller(mu, sigma);
+		vp += Mesh::Point(dx, dy, dz);
+		mesh.set_point(vh, vp);
+	}
+}
+
+void MeshTools::NormalUpdating(Mesh& mesh, double sigmaS, int maxIter)
+{
+	try
+	{
+		// 初始化
+		auto updatedNormal = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, Mesh::Normal>(mesh, "updatedNormal");
+		auto faceCentroid = OpenMesh::makeTemporaryProperty<OpenMesh::FaceHandle, Mesh::Point>(mesh);
+		auto faceArea = OpenMesh::makeTemporaryProperty<OpenMesh::FaceHandle, double>(mesh);
+		for (auto fh : mesh.faces())
+		{
+			updatedNormal[fh] = mesh.calc_face_normal(fh);
+			faceCentroid[fh] = mesh.calc_face_centroid(fh);
+			faceArea[fh] = mesh.calc_face_area(fh);
+		}
+		// 计算sigmaC，使用相邻面的中心间的平均距离
+		double sigmaC = 0.0;
+		for (auto fh : mesh.faces())
+		{
+			auto centroid = mesh.calc_face_centroid(fh);
+			for (auto ffIter = mesh.ff_begin(fh); ffIter.is_valid(); ffIter++)
+			{
+				sigmaC += (centroid - mesh.calc_face_centroid(*ffIter)).norm();
+			}
+		}
+		sigmaC /= mesh.n_faces() * 3;
+		// 为简便表示和计算，作处理 sigma = -2 * sigma^2
+		sigmaS = -2 * pow(sigmaS, 2);
+		sigmaC = -2 * pow(sigmaC, 2);
+		// 迭代更新面法向量
+		for (int i = 0; i < maxIter; i++)
+		{
+			for (auto fh : mesh.faces())
+			{
+				// 先求和式部分，累加到un，并将weight * Ws * Wc累加到K
+				// 最后更新法向量为 un / K
+				Mesh::Normal un(0.0, 0.0, 0.0);
+				double K = 0.0;
+				auto centroid = faceCentroid[fh];
+				for (auto ffIter = mesh.ff_begin(fh); ffIter.is_valid(); ffIter++)
+				{
+					double weight = faceArea[*ffIter];
+					double Ws = exp(pow((updatedNormal[fh] - updatedNormal[*ffIter]).norm(), 2) / sigmaS);
+					double Wc = exp(pow((centroid - faceCentroid[*ffIter]).norm(), 2) / sigmaC);
+					K += weight * Ws * Wc;
+					un += weight * Ws * Wc * mesh.calc_face_normal(*ffIter);
+				}
+				updatedNormal[fh] = un / K;
+				updatedNormal[fh] /= updatedNormal[fh].norm();
+			}
+		}
+	}
+	catch (const std::exception& x)
+	{
+		std::cerr << x.what() << std::endl;
+	}
+}
+
+void MeshTools::VertexUpdating(Mesh& mesh, int maxIter)
+{
+	try
+	{
+		// 获得updatedNormal属性
+		auto updatedNormal = OpenMesh::getProperty<OpenMesh::FaceHandle, Mesh::Normal>(mesh, "updatedNormal");
+		// 计算原体积
+		double volume = 0.0;
+		for (auto fh : mesh.faces())
+		{
+			auto faceNormal = mesh.calc_face_normal(fh);
+			auto faceArea = mesh.calc_face_area(fh);
+			auto fvIter = mesh.fv_begin(fh);
+			volume += mesh.point(*fvIter).dot(faceNormal) * faceArea;
+		}
+		// 迭代更新顶点位置
+		for (int i = 0; i < maxIter; i++)
+		{
+			for (auto vh : mesh.vertices())
+			{
+				auto oldPoint = mesh.point(vh);
+				auto increment = Mesh::Point(0.0, 0.0, 0.0);
+				double N = 0.0;
+				for (auto vfIter = mesh.vf_begin(vh); vfIter.is_valid(); vfIter++)
+				{
+					auto centroid = mesh.calc_face_centroid(*vfIter);
+					increment += updatedNormal[*vfIter] * (updatedNormal[*vfIter].dot(centroid - oldPoint));
+					N += 1.0;
+				}
+				increment /= N;
+				mesh.set_point(vh, oldPoint + increment);
+			}
+			// 保持体积
+			double newVolume = 0.0;
+			for (auto fh : mesh.faces())
+			{
+				auto faceNormal = mesh.calc_face_normal(fh);
+				auto faceArea = mesh.calc_face_area(fh);
+				auto fvIter = mesh.fv_begin(fh);
+				newVolume += mesh.point(*fvIter).dot(faceNormal) * faceArea;
+			}
+			double proportion = pow(volume / newVolume, 1.0 / 3.0);
+
+			for (auto vh : mesh.vertices())
+			{
+				mesh.set_point(vh, mesh.point(vh) * proportion);
+			}
+		}
+	}
+	catch (const std::exception& x)
+	{
+		std::cerr << x.what() << std::endl;
+	}
+}
+
+void MeshTools::Denoise(Mesh& mesh, double sigmaS, int normalMaxIter, int vertexMaxIter)
+{
+	if (mesh.vertices_empty())
+	{
+		return;
+	}
+	NormalUpdating(mesh, sigmaS, normalMaxIter);
+	VertexUpdating(mesh, vertexMaxIter);
+}
+
+double MeshTools::Error(Mesh& originalMesh, Mesh& processedMesh)
+{
+	double error = 0.0;
+	double sumArea = 0.0;
+	for (auto vh : originalMesh.vertices())
+	{
+		auto nvp = processedMesh.point(processedMesh.vertex_handle(vh.idx()));
+		for (auto vfIter = originalMesh.vf_begin(vh); vfIter.is_valid(); vfIter++)
+		{
+			auto fv = originalMesh.point(*originalMesh.fv_begin(*vfIter));
+			double area = originalMesh.calc_face_area(*vfIter);
+			double dist = pow((nvp-fv).dot(originalMesh.calc_face_normal(*vfIter)), 2);
+			sumArea += area;
+			error += area * dist;
+		}
+	}
+	return sqrt(error / sumArea);
+}

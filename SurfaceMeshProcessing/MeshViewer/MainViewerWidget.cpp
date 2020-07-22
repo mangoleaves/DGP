@@ -33,6 +33,10 @@ void MainViewerWidget::CreateParamWidget(void)
 	connect(meshparamwidget, SIGNAL(ShowMC()), this, SLOT(ShowMC()));
 	connect(meshparamwidget, SIGNAL(ShowAMC()), this, SLOT(ShowAMC()));
 	connect(meshparamwidget, SIGNAL(ShowGC()), this, SLOT(ShowGC()));
+	connect(meshparamwidget, SIGNAL(ShowOrigin()), this, SLOT(ShowOrigin()));
+	connect(meshparamwidget, SIGNAL(AddNoise()), this, SLOT(AddNoise()));
+	connect(meshparamwidget, SIGNAL(Denoise()), this, SLOT(Denoise()));
+
 }
 
 void MainViewerWidget::CreateViewerDialog(void)
@@ -161,6 +165,25 @@ void MainViewerWidget::ShowAMC(void)
 void MainViewerWidget::ShowGC(void)
 {
 	meshviewerwidget->SetDrawMode(InteractiveViewerWidget::GC);
+}
+
+void MainViewerWidget::ShowOrigin(void)
+{
+	meshviewerwidget->ShowOrigin();
+}
+
+void MainViewerWidget::AddNoise(void)
+{
+	double noisyProportion = meshparamwidget->noiseProportionLE->text().toDouble();
+	meshviewerwidget->AddNoise(noisyProportion);
+}
+
+void MainViewerWidget::Denoise(void)
+{
+	double sS = meshparamwidget->sigmaSLE->text().toDouble();
+	int nMI = meshparamwidget->nMILE->text().toDouble();
+	int vMI = meshparamwidget->vMILE->text().toDouble();
+	meshviewerwidget->Denoise(sS, nMI, vMI);
 }
 
 void MainViewerWidget::Lighting(bool b)

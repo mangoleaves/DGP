@@ -32,9 +32,15 @@ protected:
 	void ShowFlatLines(void);
 	void ShowFlat(void);
 	void ShowSmooth(void);
+	// Curvature
 	void ShowMC(void);
 	void ShowAMC(void);
 	void ShowGC(void);
+	// Denoise
+	void ShowOrigin(void);
+	void AddNoise(void);
+	void Denoise(void);
+
 	void Lighting(bool b);
 	void DoubleSideLighting(bool b);
 	void ShowBoundingBox(bool b);

@@ -23,6 +23,10 @@ public:
 	void ViewCenter(void);
 	void CopyRotation(void);
 	void LoadRotation(void);
+	// Denoise
+	void ShowOrigin(void);
+	void AddNoise(double proportion);
+	void Denoise(double sS, int nMI, int vMI);
 signals:
 	void LoadMeshOKSignal(bool, QString);
 public slots:
@@ -45,6 +49,14 @@ private:
 	void DrawBoundary(void) const;
 protected:
 	Mesh mesh;
+	// Denoise
+	Mesh originalMesh;
+	Mesh noisyMesh;
+	Mesh denoisedMesh;
+	double noiseProportion;
+	double sigmaS;
+	int normalMaxIter, vertexMaxIter;
+	// Curvature
 	bool hasCalcLAR;
 	bool hasCalcMeanCurvature;
 	bool hasCalcAbsoluteMeanCurvature;
@@ -52,6 +64,7 @@ protected:
 	bool hasCalcMCColor;
 	bool hasCalcAMCColor;
 	bool hasCalcGCColor;
+
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;

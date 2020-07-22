@@ -28,6 +28,10 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		QFileInfo fi(strMeshFileName);
 		strMeshPath = fi.path();
 		strMeshBaseName = fi.baseName();
+		noiseProportion = 0.0;
+		sigmaS = 0.0;
+		normalMaxIter = 0;
+		vertexMaxIter = 0;
 		hasCalcLAR = false;
 		hasCalcGaussianCurvature = false;
 		hasCalcAbsoluteMeanCurvature = false;
@@ -36,6 +40,7 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		hasCalcMCColor = false;
 		hasCalcGCColor = false;
 		UpdateMesh();
+		originalMesh.assign(mesh);
 		update();
 		return true;
 	}
@@ -145,6 +150,51 @@ void MeshViewerWidget::CopyRotation(void)
 void MeshViewerWidget::LoadRotation(void)
 {
 	LoadCopyModelViewMatrix();
+	update();
+}
+
+void MeshViewerWidget::ShowOrigin(void)
+{
+	mesh.assign(originalMesh);
+	update();
+}
+
+void MeshViewerWidget::AddNoise(double proportion)
+{
+	if (proportion == noiseProportion)
+	{
+		mesh.assign(noisyMesh);
+	}
+	else if (proportion > 0)
+	{
+		noiseProportion = proportion;
+		noisyMesh.assign(originalMesh);
+		MeshTools::GaussianNoise(noisyMesh, proportion);
+		mesh.assign(noisyMesh);
+		double error = MeshTools::Error(originalMesh, noisyMesh);
+		std::cout << "Noise proportion:" << proportion << ", Error:" << error << std::endl;
+	}
+	update();
+}
+
+void MeshViewerWidget::Denoise(double sS, int nMI, int vMI)
+{
+	if (sS == sigmaS && nMI == normalMaxIter && vMI == vertexMaxIter)
+	{
+		mesh.assign(denoisedMesh);
+	}
+	else if (sS > 0 && nMI > 0 && vMI > 0)
+	{
+		sigmaS = sS;
+		normalMaxIter = nMI;
+		vertexMaxIter = vMI;
+		denoisedMesh.assign(noisyMesh);
+		MeshTools::Denoise(denoisedMesh, sS, nMI, vMI);
+		mesh.assign(denoisedMesh);
+		double error = MeshTools::Error(originalMesh, denoisedMesh);
+		std::cout << "sigmaS, normal iterations, vertex iterations:" << sS << "," << nMI << "," << vMI 
+			<< ". Error:" << error << std::endl;
+	}
 	update();
 }
 
@@ -368,8 +418,6 @@ void MeshViewerWidget::DrawMeanCurvature(void)
 			vertexMCColor[vh] = colorMap.MapToColor(signedCurvatureNorm);
 		}
 		hasCalcMCColor = true;
-		std::cout << "mean:" << mean << "std var" << std_var << std::endl;
-		std::cout << "minV:" << minV << "  maxV:" << maxV << std::endl;
 	}
 
 

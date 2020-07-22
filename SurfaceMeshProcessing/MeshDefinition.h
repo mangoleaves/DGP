@@ -24,6 +24,10 @@ typedef OpenMesh::TriMesh_ArrayKernelT<MeshTraits> Mesh;
 
 class MeshTools
 {
+private:
+	static double BoxMuller(double mu, double sigma);
+	static void NormalUpdating(Mesh& mesh, double sigmaS, int maxIter);
+	static void VertexUpdating(Mesh& mesh, int maxIter);
 public:
 	static bool ReadMesh(Mesh & mesh, const std::string & filename);
 	static bool ReadOBJ(Mesh & mesh, const std::string & filename);
@@ -42,4 +46,7 @@ public:
 	static void MeanCurvature(Mesh& mesh);
 	static void AbsoluteMeanCurvature(Mesh& mesh);
 	static void GaussianCurvature(Mesh& mesh);
+	static void GaussianNoise(Mesh& mesh, double proportion);
+	static void Denoise(Mesh& mesh, double sigmaS, int normalMaxIter, int vertexMaxIter);
+	static double Error(Mesh& originalMesh, Mesh& processedMesh);
 };
