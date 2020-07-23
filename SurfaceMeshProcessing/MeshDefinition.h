@@ -1,5 +1,13 @@
 #pragma once
+#include <iostream>
+#include <vector>
+#include <cmath>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include <OpenMesh/Core/IO/MeshIO.hh>
+#include <OpenMesh/Core/Utils/PropertyManager.hh>
+#include <Eigen/Sparse>
+
 #ifdef _DEBUG
 #pragma comment(lib, "OpenMeshCored.lib")
 #pragma comment(lib, "OpenMeshToolsd.lib")
@@ -20,6 +28,15 @@ typedef OpenMesh::TriMesh_ArrayKernelT<MeshTraits> Mesh;
 
 class MeshTools
 {
+private:
+	struct coordinate
+	{
+		double u;
+		double v;
+
+		coordinate() :u(0), v(0) {}
+		coordinate(double pu, double pv) :u(pu), v(pv) {}
+	};
 public:
 	static bool ReadMesh(Mesh & mesh, const std::string & filename);
 	static bool ReadOBJ(Mesh & mesh, const std::string & filename);
@@ -33,4 +50,5 @@ public:
 	static int Genus(const Mesh & mesh);
 	static void BoundingBox(const Mesh & mesh, Mesh::Point & bmax, Mesh::Point & bmin);
 	static void Reassign(const Mesh & mesh1, Mesh & mesh2);
+	static bool Parameterization(Mesh& mesh, Mesh& paraMesh);
 };

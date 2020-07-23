@@ -28,6 +28,8 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		QFileInfo fi(strMeshFileName);
 		strMeshPath = fi.path();
 		strMeshBaseName = fi.baseName();
+		isPara = false;
+		originalMesh.assign(mesh);
 		UpdateMesh();
 		update();
 		return true;
@@ -150,6 +152,36 @@ void MeshViewerWidget::PrintMeshInfo(void)
 	std::cout << "  Y: [" << ptMin[1] << ", " << ptMax[1] << "]\n";
 	std::cout << "  Z: [" << ptMin[2] << ", " << ptMax[2] << "]\n";
 	std::cout << "  Diag length of BBox: " << (ptMax - ptMin).norm() << std::endl;
+}
+
+
+
+void MeshViewerWidget::ShowOrigin(void)
+{
+	mesh.assign(originalMesh);
+	UpdateMesh();
+	update();
+}
+
+void MeshViewerWidget::Parameterization(void)
+{
+	if (isPara)
+	{
+		mesh.assign(paraMesh);
+	}
+	else {
+		if (MeshTools::Parameterization(originalMesh, paraMesh))
+		{
+			mesh.assign(paraMesh);
+			isPara = true;
+		}
+		else
+		{
+			std::cout << "²ÎÊý»¯Ê§°Ü¡£" << std::endl;
+		}
+	}
+	UpdateMesh();
+	update();
 }
 
 void MeshViewerWidget::DrawScene(void)

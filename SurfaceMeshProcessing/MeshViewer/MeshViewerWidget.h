@@ -26,6 +26,8 @@ signals:
 	void LoadMeshOKSignal(bool, QString);
 public slots:
 	void PrintMeshInfo(void);
+	void ShowOrigin(void);
+	void Parameterization(void);
 protected:
 	virtual void DrawScene(void) override;
 	void DrawSceneMesh(void);
@@ -41,6 +43,9 @@ private:
 	void DrawBoundary(void) const;
 protected:
 	Mesh mesh;
+	Mesh originalMesh;
+	Mesh paraMesh;
+	bool isPara;
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;

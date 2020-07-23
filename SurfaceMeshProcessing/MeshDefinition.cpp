@@ -394,3 +394,144 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 		mesh2.add_face(vhs);
 	}
 }
+
+bool MeshTools::Parameterization(Mesh& mesh, Mesh& paraMesh)
+{
+	// 初始化
+	auto isBoundary = OpenMesh::makeTemporaryProperty<OpenMesh::VertexHandle, bool>(mesh);
+	std::vector<int> boundaryIndices;
+
+	for (auto vh : mesh.vertices())
+	{
+		isBoundary[vh] = false;
+	}
+	// 寻找第一个边界顶点
+	OpenMesh::VertexHandle firstBoundaryVh;
+	for (auto vh : mesh.vertices())
+	{
+		if (mesh.is_boundary(vh))
+		{
+			firstBoundaryVh = vh;
+			boundaryIndices.push_back(vh.idx());
+			isBoundary[vh] = true;
+			break;
+		}
+	}
+	if (boundaryIndices.empty())
+	{
+		std::cout << "网格无边界。" << std::endl;
+		return false;
+	}
+	// 依次寻找其余边界点
+	bool isContinue;
+	OpenMesh::VertexHandle nextBoundaryVh = firstBoundaryVh;
+	do
+	{
+		isContinue = false;
+		for (auto vvIter = mesh.vv_begin(nextBoundaryVh); vvIter.is_valid(); vvIter++)
+		{
+			if (mesh.is_boundary(*vvIter) && !isBoundary[*vvIter])
+			{
+				isBoundary[*vvIter] = true;
+				boundaryIndices.push_back((*vvIter).idx());
+				nextBoundaryVh = *vvIter;
+				isContinue = true;
+				break;
+			}
+		}
+	} while (isContinue);
+	// 寻找是否还有其他边界点，以确定该网格和圆盘同胚
+	for (auto vh : mesh.vertices())
+	{
+		if (mesh.is_boundary(vh) && !isBoundary[vh])
+		{
+			std::cout << "网格有多个边界。" << std::endl;
+			return false;
+		}
+	}
+	// 将边界顶点均匀映射到圆上
+	auto paraCoordinate = OpenMesh::makeTemporaryProperty<OpenMesh::VertexHandle, coordinate>(mesh);
+
+	double r = 100.0;
+	double theta = 0.0;
+	double thetaIncrement = 2 * M_PI / (double)boundaryIndices.size();
+
+	for (auto idx : boundaryIndices)
+	{
+		auto vh = mesh.vertex_handle(idx);
+		paraCoordinate[vh].u = r * cos(theta);
+		paraCoordinate[vh].v = r * sin(theta);
+		theta += thetaIncrement;
+	}
+	// 为内部顶点确定连续的行索引，以便构造线性方程组
+	auto vertexRow = OpenMesh::makeTemporaryProperty<OpenMesh::VertexHandle, int>(mesh);
+	int row = 0;
+
+	for (auto vh : mesh.vertices())
+	{
+		if (!isBoundary[vh])
+		{
+			vertexRow[vh] = row;
+			row++;
+		}
+	}
+	// 构造稀疏线性方程组
+	typedef Eigen::Triplet<double> T;
+	typedef Eigen::SparseMatrix<double> SpMat;
+
+	int nInnerVertex = mesh.n_vertices() - boundaryIndices.size();
+	SpMat A(nInnerVertex, nInnerVertex);
+	std::vector<T> coefficients;
+	Eigen::VectorXd bu(nInnerVertex);
+	Eigen::VectorXd bv(nInnerVertex);
+
+	for (int i = 0; i < nInnerVertex; i++)
+	{
+		bu[i] = 0;
+		bv[i] = 0;
+	}
+	for (auto vh : mesh.vertices())
+	{
+		if (!isBoundary[vh])
+		{
+			double N = 0;
+			for (auto vvIter = mesh.vv_begin(vh); vvIter.is_valid(); vvIter++)
+			{
+				N += 1.0;
+				if (isBoundary[*vvIter])
+				{
+					bu[vertexRow[vh]] += paraCoordinate[*vvIter].u;
+					bv[vertexRow[vh]] += paraCoordinate[*vvIter].v;
+				}
+				else
+				{
+					coefficients.push_back(T(vertexRow[vh], vertexRow[*vvIter], -1));
+				}
+			}
+			coefficients.push_back(T(vertexRow[vh], vertexRow[vh], N));
+		}
+	}
+	A.setFromTriplets(coefficients.begin(), coefficients.end());
+	A.makeCompressed();
+	// 求解
+	Eigen::SimplicialCholesky<SpMat> chol(A);
+	Eigen::VectorXd u = chol.solve(bu);
+	Eigen::VectorXd v = chol.solve(bv);
+	// 置内部顶点的参数坐标
+	for (auto vh : mesh.vertices())
+	{
+		if (!isBoundary[vh])
+		{
+			paraCoordinate[vh].u = u[vertexRow[vh]];
+			paraCoordinate[vh].v = v[vertexRow[vh]];
+		}
+	}
+	paraMesh.assign(mesh);
+	for (auto vh : paraMesh.vertices())
+	{
+		auto originalVh = mesh.vertex_handle(vh.idx());
+		Mesh::Point np(paraCoordinate[originalVh].u, paraCoordinate[originalVh].v, 0);
+		paraMesh.set_point(vh, np);
+	}
+	return true;
+}

@@ -4,6 +4,7 @@ MeshParamWidget::MeshParamWidget(QWidget *parent)
 	: QWidget(parent)
 {
 	CreateTabWidget();
+	CreateParaWidget();
 	CreateLayout();
 }
 
@@ -28,11 +29,26 @@ void MeshParamWidget::CreateTabWidget(void)
 	saParam->setWidgetResizable(true);
 }
 
+void MeshParamWidget::CreateParaWidget(void)
+{
+	paraButton = new QPushButton(tr("Parameterization"));
+	connect(paraButton, SIGNAL(clicked()), SIGNAL(ParaSignal()));
+	showOriginButton = new QPushButton(tr("Show Original Mesh"));
+	connect(showOriginButton, SIGNAL(clicked()), SIGNAL(ShowOriginSignal()));
+
+	QVBoxLayout* layout = new QVBoxLayout();
+	layout->addWidget(showOriginButton);
+	layout->addWidget(paraButton);
+	paraWidget = new QWidget();
+	paraWidget->setLayout(layout);
+}
+
 void MeshParamWidget::CreateLayout(void)
 {
 	twParam = new QTabWidget();
 	twParam->addTab(saParam, "Tab");
 	QGridLayout *layout = new QGridLayout();
-	layout->addWidget(twParam, 0, 0, 1, 1);
+	layout->addWidget(paraWidget, 0, 0, 1, 1);
+	layout->addWidget(twParam, 1, 0, 1, 1);
 	this->setLayout(layout);
 }
