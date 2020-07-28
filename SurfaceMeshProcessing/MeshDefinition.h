@@ -3,10 +3,11 @@
 #include <vector>
 #include <cmath>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
-#include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
 #include <OpenMesh/Core/IO/MeshIO.hh>
 #include <OpenMesh/Core/Utils/PropertyManager.hh>
+#include <Eigen/Dense>
 #include <Eigen/Sparse>
+
 
 #ifdef _DEBUG
 #pragma comment(lib, "OpenMeshCored.lib")
@@ -29,14 +30,16 @@ typedef OpenMesh::TriMesh_ArrayKernelT<MeshTraits> Mesh;
 class MeshTools
 {
 private:
-	struct coordinate
-	{
-		double u;
-		double v;
+	typedef Eigen::Triplet<double> T;
+	typedef Eigen::SparseMatrix<double> SpMat;
 
-		coordinate() :u(0), v(0) {}
-		coordinate(double pu, double pv) :u(pu), v(pv) {}
-	};
+	static bool Parameterization(Mesh& mesh);
+	static void CalcLocalCoordinate(Mesh& mesh);
+	static void CalcSt(Mesh& mesh);
+	static void CalcLt(Mesh& mesh);
+	static void CalcCoeMat(Mesh& mesh, SpMat& coeMat);
+	static void CalcBVec(Mesh& mesh, Eigen::VectorXd& bx, Eigen::VectorXd& by);
+	static double CalcEnergy(Mesh& mesh);
 public:
 	static bool ReadMesh(Mesh & mesh, const std::string & filename);
 	static bool ReadOBJ(Mesh & mesh, const std::string & filename);
@@ -50,5 +53,5 @@ public:
 	static int Genus(const Mesh & mesh);
 	static void BoundingBox(const Mesh & mesh, Mesh::Point & bmax, Mesh::Point & bmin);
 	static void Reassign(const Mesh & mesh1, Mesh & mesh2);
-	static bool Parameterization(Mesh& mesh, Mesh& paraMesh);
+	static bool ParameterizationARAP(Mesh& mesh, Mesh& paraMesh, int maxIter, double minEnergyVar);
 };

@@ -27,7 +27,7 @@ signals:
 public slots:
 	void PrintMeshInfo(void);
 	void ShowOrigin(void);
-	void Parameterization(void);
+	void Parameterization(int maxIter, double minEnergyVar);
 protected:
 	virtual void DrawScene(void) override;
 	void DrawSceneMesh(void);
@@ -45,7 +45,8 @@ protected:
 	Mesh mesh;
 	Mesh originalMesh;
 	Mesh paraMesh;
-	bool isPara;
+	int  iterations;
+	double energyVar;
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;

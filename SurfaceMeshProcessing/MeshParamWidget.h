@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <QWidget>
 #include <QtGui>
 #include <QtWidgets>
@@ -18,8 +19,12 @@ private:
 signals:
 	void PrintInfoSignal();
 	void ShowOriginSignal();
-	void ParaSignal();
+	void ParaSignal(int maxIter, double minEnergyVar);
+private slots:
+	void ParaBtnClicked(void);
 private:
+	QLineEdit* iterLE;
+	QLineEdit* energyLE;
 	QPushButton* paraButton;
 	QPushButton* showOriginButton;
 	QWidget* paraWidget;

@@ -28,7 +28,8 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		QFileInfo fi(strMeshFileName);
 		strMeshPath = fi.path();
 		strMeshBaseName = fi.baseName();
-		isPara = false;
+		iterations = 0;
+		energyVar = 0.0;
 		originalMesh.assign(mesh);
 		UpdateMesh();
 		update();
@@ -163,17 +164,18 @@ void MeshViewerWidget::ShowOrigin(void)
 	update();
 }
 
-void MeshViewerWidget::Parameterization(void)
+void MeshViewerWidget::Parameterization(int maxIter, double minEnergyVar)
 {
-	if (isPara)
+	if (maxIter == iterations && minEnergyVar == energyVar)
 	{
 		mesh.assign(paraMesh);
 	}
 	else {
-		if (MeshTools::Parameterization(originalMesh, paraMesh))
+		if (MeshTools::ParameterizationARAP(originalMesh, paraMesh, maxIter, minEnergyVar))
 		{
 			mesh.assign(paraMesh);
-			isPara = true;
+			iterations = maxIter;
+			energyVar = minEnergyVar;
 		}
 		else
 		{

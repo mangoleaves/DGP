@@ -395,18 +395,19 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 	}
 }
 
-bool MeshTools::Parameterization(Mesh& mesh, Mesh& paraMesh)
+// Tutte+Barycentric Mapping，参数化坐标储存在mesh的UV属性中
+bool MeshTools::Parameterization(Mesh& mesh)
 {
 	// 初始化
 	auto isBoundary = OpenMesh::makeTemporaryProperty<OpenMesh::VertexHandle, bool>(mesh);
 	std::vector<int> boundaryIndices;
+	OpenMesh::VertexHandle firstBoundaryVh;
 
 	for (auto vh : mesh.vertices())
 	{
 		isBoundary[vh] = false;
 	}
-	// 寻找第一个边界顶点
-	OpenMesh::VertexHandle firstBoundaryVh;
+	// 寻找第一个边界点
 	for (auto vh : mesh.vertices())
 	{
 		if (mesh.is_boundary(vh))
@@ -450,17 +451,17 @@ bool MeshTools::Parameterization(Mesh& mesh, Mesh& paraMesh)
 		}
 	}
 	// 将边界顶点均匀映射到圆上
-	auto paraCoordinate = OpenMesh::makeTemporaryProperty<OpenMesh::VertexHandle, coordinate>(mesh);
+	auto paraCoordinate = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, Eigen::Vector2d>(mesh, "paraCoordinate");
 
-	double r = 100.0;
+	double r = 1000.0;
 	double theta = 0.0;
 	double thetaIncrement = 2 * M_PI / (double)boundaryIndices.size();
 
 	for (auto idx : boundaryIndices)
 	{
 		auto vh = mesh.vertex_handle(idx);
-		paraCoordinate[vh].u = r * cos(theta);
-		paraCoordinate[vh].v = r * sin(theta);
+		paraCoordinate[vh][0] = r * cos(theta);
+		paraCoordinate[vh][1] = r * sin(theta);
 		theta += thetaIncrement;
 	}
 	// 为内部顶点确定连续的行索引，以便构造线性方程组
@@ -476,9 +477,6 @@ bool MeshTools::Parameterization(Mesh& mesh, Mesh& paraMesh)
 		}
 	}
 	// 构造稀疏线性方程组
-	typedef Eigen::Triplet<double> T;
-	typedef Eigen::SparseMatrix<double> SpMat;
-
 	int nInnerVertex = mesh.n_vertices() - boundaryIndices.size();
 	SpMat A(nInnerVertex, nInnerVertex);
 	std::vector<T> coefficients;
@@ -500,8 +498,8 @@ bool MeshTools::Parameterization(Mesh& mesh, Mesh& paraMesh)
 				N += 1.0;
 				if (isBoundary[*vvIter])
 				{
-					bu[vertexRow[vh]] += paraCoordinate[*vvIter].u;
-					bv[vertexRow[vh]] += paraCoordinate[*vvIter].v;
+					bu[vertexRow[vh]] += paraCoordinate[*vvIter][0];
+					bv[vertexRow[vh]] += paraCoordinate[*vvIter][1];
 				}
 				else
 				{
@@ -513,7 +511,6 @@ bool MeshTools::Parameterization(Mesh& mesh, Mesh& paraMesh)
 	}
 	A.setFromTriplets(coefficients.begin(), coefficients.end());
 	A.makeCompressed();
-	// 求解
 	Eigen::SimplicialCholesky<SpMat> chol(A);
 	Eigen::VectorXd u = chol.solve(bu);
 	Eigen::VectorXd v = chol.solve(bv);
@@ -522,16 +519,244 @@ bool MeshTools::Parameterization(Mesh& mesh, Mesh& paraMesh)
 	{
 		if (!isBoundary[vh])
 		{
-			paraCoordinate[vh].u = u[vertexRow[vh]];
-			paraCoordinate[vh].v = v[vertexRow[vh]];
+			paraCoordinate[vh][0] = u[vertexRow[vh]];
+			paraCoordinate[vh][1] = v[vertexRow[vh]];
 		}
-	}
-	paraMesh.assign(mesh);
-	for (auto vh : paraMesh.vertices())
-	{
-		auto originalVh = mesh.vertex_handle(vh.idx());
-		Mesh::Point np(paraCoordinate[originalVh].u, paraCoordinate[originalVh].v, 0);
-		paraMesh.set_point(vh, np);
 	}
 	return true;
 }
+
+void MeshTools::CalcLocalCoordinate(Mesh& mesh)
+{
+	auto localCoordinate = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, std::map<int, Eigen::Vector2d>>(mesh, "localCoordinate");
+
+	for (auto fh : mesh.faces())
+	{
+		auto fvIter = mesh.fv_begin(fh);
+		auto Vi = *fvIter;
+		auto Vj = *(++fvIter);
+		auto Vk = *(++fvIter);
+		// 计算X轴、Y轴方向的单位向量
+		OpenMesh::Vec3d vecX = (mesh.point(Vj) - mesh.point(Vi)).normalize();
+		OpenMesh::Vec3d vecY = mesh.calc_face_normal(fh).cross(mesh.point(Vj) - mesh.point(Vi)).normalize();
+		// 将3个点投影到X、Y轴上
+		localCoordinate[fh][Vi.idx()] = Eigen::Vector2d(0.0, 0.0);
+		localCoordinate[fh][Vj.idx()] = Eigen::Vector2d(vecX.dot(mesh.point(Vj) - mesh.point(Vi)), 0.0);
+		localCoordinate[fh][Vk.idx()] = Eigen::Vector2d(vecX.dot(mesh.point(Vk) - mesh.point(Vi)), vecY.dot(mesh.point(Vk) - mesh.point(Vi)));
+	}
+}
+
+// S_t = Sum_{i=0}^{2} cot(theta^i)(u^i - u^{i+1})(x^i - x^{i+1})^T
+void MeshTools::CalcSt(Mesh& mesh)
+{
+	auto faceSt = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(mesh, "faceSt");
+	auto localCoordinate = OpenMesh::getProperty<OpenMesh::FaceHandle, std::map<int, Eigen::Vector2d>>(mesh, "localCoordinate");
+	auto paraCoordinate = OpenMesh::getProperty<OpenMesh::VertexHandle, Eigen::Vector2d>(mesh, "paraCoordinate");
+
+	for (auto fh : mesh.faces())
+	{
+		faceSt[fh] << 0, 0, 0, 0;
+		for (auto fhIter = mesh.fh_begin(fh); fhIter.is_valid(); fhIter++)
+		{
+			auto Vi = (*fhIter).from();
+			auto Vj = (*fhIter).to();
+			double theta = mesh.calc_sector_angle((*fhIter).next());
+			faceSt[fh] += (paraCoordinate[Vi] - paraCoordinate[Vj]) *
+				(localCoordinate[fh][Vi.idx()] - localCoordinate[fh][Vj.idx()]).transpose() / tan(theta);
+		}
+	}
+}
+
+// 对S_t signed SVD分解，S_t = U * S * V^T，则L_t = U * V^T
+void MeshTools::CalcLt(Mesh& mesh)
+{
+	auto faceSt = OpenMesh::getProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(mesh, "faceSt");
+	auto faceLt = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(mesh, "faceLt");
+
+	for (auto fh : mesh.faces())
+	{
+		auto SVD = faceSt[fh].jacobiSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
+		auto U = SVD.matrixU();
+		auto V = SVD.matrixV();
+		Eigen::Matrix2d Lt = U * V.transpose();
+		if (Lt.determinant() < 0)
+		{
+			V(0, 1) = -V(0, 1);
+			V(1, 1) = -V(1, 1);
+			Lt = U * V.transpose();
+		}
+		faceLt[fh] = Lt;
+	}
+}
+
+void MeshTools::CalcCoeMat(Mesh& mesh, SpMat& coeMat)
+{
+	std::vector<T> coefficients;
+	for (auto vh : mesh.vertices())
+	{
+		int idx_i = vh.idx();
+		double coe_ii = 0.0;
+		for (auto vvIter = mesh.vv_begin(vh); vvIter.is_valid(); vvIter++)
+		{
+			int idx_j = (*vvIter).idx();
+			auto he_ij = mesh.find_halfedge(vh, *vvIter);
+			auto he_ji = he_ij.opp();
+			double coe = 0.0;
+			if (!he_ij.is_boundary())
+			{
+				double theta_ij = mesh.calc_sector_angle(he_ij.next());
+				coe += 1.0 / tan(theta_ij);
+			}
+			if (!he_ji.is_boundary())
+			{
+				double theta_ji = mesh.calc_sector_angle(he_ji.next());
+				coe += 1.0 / tan(theta_ji);
+			}
+			coe_ii += coe;
+			coefficients.push_back(T(idx_i, idx_j, -coe));
+		}
+		coefficients.push_back(T(idx_i, idx_i, coe_ii));
+	}
+	coeMat.resize(mesh.n_vertices(), mesh.n_vertices());
+	coeMat.setFromTriplets(coefficients.begin(), coefficients.end());
+	coeMat.makeCompressed();
+}
+
+void MeshTools::CalcBVec(Mesh& mesh, Eigen::VectorXd& bx, Eigen::VectorXd& by)
+{
+	auto localCoordinate = OpenMesh::getProperty<OpenMesh::FaceHandle, std::map<int, Eigen::Vector2d>>(mesh, "localCoordinate");
+	auto faceLt = OpenMesh::getProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(mesh, "faceLt");
+
+	for (auto vh : mesh.vertices())
+	{
+		int idx_i = vh.idx();
+		Eigen::Vector2d b_i(0.0, 0.0);
+		for (auto vvIter = mesh.vv_begin(vh); vvIter.is_valid(); vvIter++)
+		{
+			int idx_j = (*vvIter).idx();
+			auto he_ij = mesh.find_halfedge(vh, *vvIter);
+			auto he_ji = he_ij.opp();
+			if (!he_ij.is_boundary())
+			{
+				auto x_i = localCoordinate[he_ij.face()][idx_i];
+				auto x_j = localCoordinate[he_ij.face()][idx_j];
+				double theta_ij = mesh.calc_sector_angle(he_ij.next());
+				auto Lt_ij = faceLt[he_ij.face()];
+				b_i += Lt_ij * (x_i - x_j) / tan(theta_ij);
+			}
+			if (!he_ji.is_boundary())
+			{
+				auto x_i = localCoordinate[he_ji.face()][idx_i];
+				auto x_j = localCoordinate[he_ji.face()][idx_j];
+				double theta_ji = mesh.calc_sector_angle(he_ji.next());
+				auto Lt_ji = faceLt[he_ji.face()];
+				b_i += Lt_ji * (x_i - x_j) / tan(theta_ji);
+			}
+		}
+		bx[idx_i] = b_i[0];
+		by[idx_i] = b_i[1];
+	}
+}
+
+double MeshTools::CalcEnergy(Mesh& mesh)
+{
+	auto localCoordinate = OpenMesh::getProperty<OpenMesh::FaceHandle, std::map<int, Eigen::Vector2d>>(mesh, "localCoordinate");
+	auto paraCoordinate = OpenMesh::getProperty<OpenMesh::VertexHandle, Eigen::Vector2d>(mesh, "paraCoordinate");
+	auto faceLt = OpenMesh::getProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(mesh, "faceLt");
+
+	double E = 0.0;
+	for (auto heh : mesh.halfedges())
+	{
+		if (!heh.is_boundary())
+		{
+			auto vi = heh.from();
+			auto vj = heh.to();
+			auto fh = heh.face();
+			double theta = mesh.calc_sector_angle(heh.next());
+			E += pow(((paraCoordinate[vi] - paraCoordinate[vj]) - faceLt[fh]
+				* (localCoordinate[fh][vi.idx()] - localCoordinate[fh][vj.idx()])).norm(), 2.0) / tan(theta);
+		}
+	}
+	return E * 0.5;
+}
+
+bool MeshTools::ParameterizationARAP(Mesh& mesh, Mesh& paraMesh, int maxIter, double minEnergyVar)
+{
+	if (maxIter < 0 || minEnergyVar < 0.0)
+	{
+		return false;
+	}
+	// 初始参数化
+	if (!Parameterization(mesh))
+	{
+		return false;
+	}
+	// 局部坐标
+	CalcLocalCoordinate(mesh);
+	// 稀疏系数矩阵
+	SpMat coeMat;
+	CalcCoeMat(mesh, coeMat);
+	Eigen::SimplicialCholesky<SpMat> chol(coeMat);
+	// 右侧向量
+	Eigen::VectorXd bx, by;
+	bx.resize(mesh.n_vertices());
+	by.resize(mesh.n_vertices());
+	// 解
+	Eigen::VectorXd u, v;
+
+	auto paraCoordinate = OpenMesh::getProperty<OpenMesh::VertexHandle, Eigen::Vector2d>(mesh, "paraCoordinate");
+	
+	double prevE, E;
+
+	// 迭代一次计算初始能量
+
+	// Local phase
+	CalcSt(mesh);
+	CalcLt(mesh);
+	// Global phase
+	CalcBVec(mesh, bx, by);
+	u = chol.solve(bx);
+	v = chol.solve(by);
+	// 置内部顶点的参数坐标
+	for (auto vh : mesh.vertices())
+	{
+		paraCoordinate[vh][0] = u[vh.idx()];
+		paraCoordinate[vh][1] = v[vh.idx()];
+	}
+	prevE = CalcEnergy(mesh);
+
+	// 开始迭代
+	for (int i = 1; i < maxIter; i++)
+	{
+		// Local phase
+		CalcSt(mesh);
+		CalcLt(mesh);
+		// Global phase
+		CalcBVec(mesh, bx, by);
+		u = chol.solve(bx);
+		v = chol.solve(by);
+		// 置内部顶点的参数坐标
+		for (auto vh : mesh.vertices())
+		{
+			paraCoordinate[vh][0] = u[vh.idx()];
+			paraCoordinate[vh][1] = v[vh.idx()];
+		}
+		// 判断能量变化
+		E = CalcEnergy(mesh);
+		if (prevE - E < minEnergyVar)
+		{
+			break;
+		}
+		prevE = E;
+	}
+	// 输出
+	paraMesh.assign(mesh);
+	for (auto vh : paraMesh.vertices())
+	{
+		auto originVh = mesh.vertex_handle(vh.idx());
+		paraMesh.set_point(vh, Mesh::Point(paraCoordinate[originVh][0], paraCoordinate[originVh][1], 0));
+	}
+	return true;
+}
+
+
