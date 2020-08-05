@@ -5,6 +5,189 @@
 #include <fstream>
 #include <cctype>
 
+void MeshTools::CalcWeight(Mesh& mesh)
+{
+	auto weight = OpenMesh::getOrMakeProperty<OpenMesh::HalfedgeHandle, double>(mesh, "weight");
+	// auto cot = OpenMesh::makeTemporaryProperty<OpenMesh::HalfedgeHandle, double>(mesh);
+	/*
+	for (auto heh : mesh.halfedges())
+	{
+		if (mesh.is_boundary(heh))
+		{
+			cot[heh] = 0.0;
+		}
+		else
+		{
+			cot[heh] = 1.0 / tan(mesh.calc_sector_angle(heh.next()));
+		}
+	}
+	*/
+	for (auto heh : mesh.halfedges())
+	{
+		//weight[heh] = 0.5 * (cot[heh] + cot[heh.opp()]);	// cannot implement
+		weight[heh] = 1;
+	}
+}
+
+void MeshTools::CalcS(Mesh& mesh, Mesh& deformedMesh)
+{
+	auto S = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, Eigen::Matrix3d>(mesh, "S");
+	auto weight = OpenMesh::getProperty<OpenMesh::HalfedgeHandle, double>(mesh, "weight");
+
+	for (auto vih : mesh.vertices())
+	{
+		auto vih_ = deformedMesh.vertex_handle(vih.idx());
+		S[vih] << 0, 0, 0, 
+				  0, 0, 0, 
+				  0, 0, 0;
+		auto pi = mesh.point(vih);
+		auto pi_ = deformedMesh.point(vih_);
+		for (auto vvIter = deformedMesh.vv_begin(vih); vvIter.is_valid(); vvIter++)
+		{
+			auto vjh = *vvIter;
+			auto vjh_ = deformedMesh.vertex_handle((*vvIter).idx());
+
+			auto eij = pi - mesh.point(vjh);
+			auto eij_ = pi_ - deformedMesh.point(vjh_);
+			Eigen::Vector3d eijv(eij[0], eij[1], eij[2]);
+			Eigen::Vector3d eijv_(eij_[0], eij_[1], eij_[2]);
+
+			auto heh = mesh.find_halfedge(vih, vjh);
+
+			S[vih] += weight[heh] * eijv * eijv_.transpose();
+		}
+	}
+}
+
+void MeshTools::CalcR(Mesh& mesh)
+{
+	auto S = OpenMesh::getProperty<OpenMesh::VertexHandle, Eigen::Matrix3d>(mesh, "S");
+	auto R = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, Eigen::Matrix3d>(mesh, "R");
+
+	for (auto vh : mesh.vertices())
+	{
+		auto SVD = S[vh].jacobiSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
+		auto U = SVD.matrixU();
+		auto V = SVD.matrixV();
+		Eigen::Matrix3d Ri = V * U.transpose();
+		if (Ri.determinant() < 0)
+		{
+			U(0, 2) = -U(0, 2);
+			U(1, 2) = -U(1, 2);
+			U(2, 2) = -U(2, 2);
+			Ri = V * U.transpose();
+		}
+		R[vh] = Ri;
+	}
+}
+
+void MeshTools::CalcCoeMat(Mesh& mesh, Mesh& deformedMesh, 
+	std::map<int,int>& compressedIndex, 
+	std::vector<Eigen::VectorXd>& bias, SpMat& coeMat)
+{
+	auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+	auto weight = OpenMesh::getProperty<OpenMesh::HalfedgeHandle, double>(mesh, "weight");
+
+	int idx = 0;
+	for (auto vh : mesh.vertices())
+	{
+		if (vertexState[vh] == NotSelected)
+		{
+			compressedIndex[vh.idx()] = idx;
+			idx++;
+		}
+	}
+	int n_var = idx;
+
+	bias[0].resize(n_var);
+	bias[1].resize(n_var);
+	bias[2].resize(n_var);
+	for (int i = 0; i < n_var; i++)
+	{
+		bias[0][i] = 0.0;
+		bias[1][i] = 0.0;
+		bias[2][i] = 0.0;
+	}
+
+	std::vector<T> coefficients;
+	for (auto vh : mesh.vertices())
+	{
+		if (vertexState[vh] == NotSelected)
+		{
+			double coeii = 0.0;
+			int idxi = compressedIndex[vh.idx()];
+			for (auto vvIter = mesh.vv_begin(vh); vvIter.is_valid(); vvIter++)
+			{
+				auto heh = mesh.find_halfedge(vh, *vvIter);
+				coeii += weight[heh];
+				if (vertexState[*vvIter] == NotSelected)
+				{
+					int idxj = compressedIndex[(*vvIter).idx()];
+					coefficients.push_back(T(idxi, idxj, -weight[heh]));
+				}
+				else
+				{
+					auto pj_ = deformedMesh.point(deformedMesh.vertex_handle((*vvIter).idx()));
+					bias[0][idxi] += weight[heh] * pj_[0];
+					bias[1][idxi] += weight[heh] * pj_[1];
+					bias[2][idxi] += weight[heh] * pj_[2];
+				}
+			}
+			coefficients.push_back(T(idxi, idxi, coeii));
+		}
+	}
+	coeMat.resize(n_var, n_var);
+	coeMat.setFromTriplets(coefficients.begin(), coefficients.end());
+	coeMat.makeCompressed();
+}
+
+void MeshTools::CalcBVec(Mesh& mesh, std::map<int, int>& compressedIndex, 
+	std::vector<Eigen::VectorXd>& bias)
+{
+	auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+	auto weight = OpenMesh::getProperty<OpenMesh::HalfedgeHandle, double>(mesh, "weight");
+	auto R = OpenMesh::getProperty<OpenMesh::VertexHandle, Eigen::Matrix3d>(mesh, "R");
+
+	for (auto vh : mesh.vertices())
+	{
+		if (vertexState[vh] == NotSelected)
+		{
+			int idxi = compressedIndex[vh.idx()];
+			auto pi = mesh.point(vh);
+			for (auto vvIter = mesh.vv_begin(vh); vvIter.is_valid(); vvIter++)
+			{
+				auto heh = mesh.find_halfedge(vh, *vvIter);
+				auto dp = pi - mesh.point(*vvIter);
+				Eigen::Vector3d dpv(dp[0], dp[1], dp[2]);
+				Eigen::Vector3d rij = 0.5 * weight[heh] * (R[vh] + R[*vvIter]) * dpv;
+				bias[0][idxi] += rij[0];
+				bias[1][idxi] += rij[1];
+				bias[2][idxi] += rij[2];
+			}
+		}
+	}
+}
+
+void MeshTools::SolveUpdate(Mesh& mesh, Mesh& deformedMesh, std::map<int, int>& compressedIndex,
+	Eigen::SimplicialCholesky<SpMat>& chol, std::vector<Eigen::VectorXd>& bias)
+{
+	auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+
+	Eigen::VectorXd x, y, z;
+	x = chol.solve(bias[0]);
+	y = chol.solve(bias[1]);
+	z = chol.solve(bias[2]);
+
+	for (auto vh_ : deformedMesh.vertices())
+	{
+		if (vertexState[mesh.vertex_handle(vh_.idx())] == NotSelected)
+		{
+			int idx = compressedIndex[vh_.idx()];
+			deformedMesh.set_point(vh_, Mesh::Point(x[idx], y[idx], z[idx]));
+		}
+	}
+}
+
 bool MeshTools::ReadMesh(Mesh & mesh, const std::string & filename)
 {
 	std::string path(".");
@@ -392,5 +575,33 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 			vhs.push_back(mesh2.vertex_handle(fvh.idx()));
 		}
 		mesh2.add_face(vhs);
+	}
+}
+
+void MeshTools::Deform(Mesh& mesh, Mesh& deformedMesh)
+{
+	CalcWeight(mesh);
+	std::map<int, int> compressedIndex;
+	SpMat coeMat;
+	std::vector<Eigen::VectorXd> bias;
+	bias.resize(3);
+	CalcCoeMat(mesh, deformedMesh, compressedIndex, bias, coeMat);
+	Eigen::SimplicialCholesky<SpMat> chol(coeMat);
+
+	for (int i = 0; i < 10; i++)
+	{
+		CalcS(mesh, deformedMesh);
+		CalcR(mesh);
+		std::vector<Eigen::VectorXd> biasCopy = bias;
+		CalcBVec(mesh, compressedIndex, biasCopy);
+		SolveUpdate(mesh, deformedMesh, compressedIndex, chol, biasCopy);
+	}
+}
+
+void MeshTools::AssignPoints(Mesh& mesh, Mesh& deformedMesh)
+{
+	for (auto vh : mesh.vertices())
+	{
+		mesh.set_point(vh, deformedMesh.point(deformedMesh.vertex_handle(vh.idx())));
 	}
 }

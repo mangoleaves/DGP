@@ -28,6 +28,12 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		QFileInfo fi(strMeshFileName);
 		strMeshPath = fi.path();
 		strMeshBaseName = fi.baseName();
+		auto vertexState = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+		for (auto vh : mesh.vertices())
+		{
+			vertexState[vh] = NotSelected;
+		}
+		selectMode = NoSelect;
 		UpdateMesh();
 		update();
 		return true;
@@ -66,6 +72,7 @@ void MeshViewerWidget::UpdateMesh(void)
 		minlen = len < minlen ? len : minlen;
 		avelen += len;
 	}
+	avgEdgeLength = avelen / mesh.n_vertices();
 
 	SetScenePosition((ptMin + ptMax)*0.5, (ptMin - ptMax).norm()*0.5);
 	std::cout << "Information of the input mesh:" << std::endl;
@@ -152,6 +159,151 @@ void MeshViewerWidget::PrintMeshInfo(void)
 	std::cout << "  Diag length of BBox: " << (ptMax - ptMin).norm() << std::endl;
 }
 
+void MeshViewerWidget::SetSMFixed(void)
+{
+	selectMode = SelectFixed;
+}
+
+void MeshViewerWidget::SetSMCustom(void)
+{
+	selectMode = SelectCustom;
+}
+
+void MeshViewerWidget::SetSMMove(void)
+{
+	selectMode = Move;
+}
+
+void MeshViewerWidget::SetSMNoSelect(void)
+{
+	selectMode = NoSelect;
+}
+
+void MeshViewerWidget::ClearSelected(void)
+{
+	auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+	for (auto vh : mesh.vertices())
+	{
+		vertexState[vh] = NotSelected;
+	}
+	update();
+}
+
+bool MeshViewerWidget::event(QEvent* _event)
+{
+	if (_event->type() == QEvent::MouseButtonPress)
+	{
+		if (selectMode == Move)
+		{
+			auto e = static_cast<QMouseEvent*>(_event);
+			QPoint winCor = e->pos();
+			double depth;
+			OpenMesh::Vec3d objCor;
+			WinCor2ObjCor(winCor.x(), winCor.y(), objCor, depth);
+
+			OpenMesh::VertexHandle minVh;
+			if (NearestVertex(objCor, minVh))
+			{
+				auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+				if (vertexState[minVh] == Custom)
+				{
+					isMovable = true;
+					moveDepth = depth;
+					lastObjCor = objCor;
+					return true;
+				}
+			}
+		}
+	}
+	else if (_event->type() == QEvent::MouseMove)
+	{
+		if (selectMode == Move && isMovable)
+		{
+			auto e = static_cast<QMouseEvent*>(_event);
+			QPoint winCor = e->pos();
+			OpenMesh::Vec3d objCor;
+			WinCor2ObjCor(winCor.x(), winCor.y(), moveDepth, objCor);
+
+			auto moveVec = objCor - lastObjCor;
+			lastObjCor = objCor;
+			Mesh deformedMesh;
+			deformedMesh.assign(mesh);
+			auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+			for (auto vh_ : deformedMesh.vertices())
+			{
+				if (vertexState[mesh.vertex_handle(vh_.idx())] == Custom)
+				{
+					deformedMesh.set_point(vh_, deformedMesh.point(vh_) + moveVec);
+				}
+			}
+			MeshTools::Deform(mesh, deformedMesh);
+			MeshTools::AssignPoints(mesh, deformedMesh);
+			update();
+			return true;
+		}
+	}
+	else if (_event->type() == QEvent::MouseButtonRelease)
+	{
+		if (selectMode == Move && isMovable)
+		{
+			isMovable = false;
+			return true;
+		}
+	}
+	return QGLViewerWidget::event(_event);
+}
+
+void MeshViewerWidget::mouseDoubleClickEvent(QMouseEvent* _event)
+{
+	switch (selectMode)
+	{
+	case NoSelect:
+		break;
+	case SelectFixed:
+	case SelectCustom: 
+	{
+		QPoint winCor = _event->pos();
+		double depth;
+		OpenMesh::Vec3d objCor;
+		WinCor2ObjCor(winCor.x(), winCor.y(), objCor, depth);
+		OpenMesh::VertexHandle minVh;
+
+		if (NearestVertex(objCor,minVh))
+		{
+			auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+			if (selectMode == SelectFixed)
+			{
+				if (vertexState[minVh] == NotSelected)
+				{
+					vertexState[minVh] = Fixed;
+				}
+				else if (vertexState[minVh] == Fixed)
+				{
+					vertexState[minVh] = NotSelected;
+				}
+			}
+			else if (selectMode == SelectCustom)
+			{
+				if (vertexState[minVh] == NotSelected)
+				{
+					vertexState[minVh] = Custom;
+				}
+				else if (vertexState[minVh] == Custom)
+				{
+					vertexState[minVh] = NotSelected;
+				}
+			}
+			update();
+		}
+		break;
+	}
+	case Move:
+		break;
+	default:
+		break;
+	}
+}
+
 void MeshViewerWidget::DrawScene(void)
 {
 	glMatrixMode(GL_PROJECTION);
@@ -197,20 +349,75 @@ void MeshViewerWidget::DrawSceneMesh(void)
 	}
 }
 
-void MeshViewerWidget::DrawPoints(void) const
+bool MeshViewerWidget::NearestVertex(OpenMesh::Vec3d objCor, OpenMesh::VertexHandle& minVh)
 {
-	glColor3d(1.0, 0.5, 0.5);
+	double maxAllowedDis = avgEdgeLength * 0.5;
+	double minDis = INFINITY;
+	OpenMesh::VertexHandle mv;
+
+	for (auto vh : mesh.vertices())
+	{
+		auto vp = mesh.point(vh);
+		double dis = (objCor - vp).norm();
+		if (dis < minDis)
+		{
+			minDis = dis;
+			mv = vh;
+		}
+	}
+
+	if (minDis <= maxAllowedDis)
+	{
+		minVh = mv;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+void MeshViewerWidget::DrawPoints(void)
+{
+	auto vertexState = OpenMesh::getProperty<OpenMesh::VertexHandle, VertexState>(mesh, "vertexState");
+	glColor3d(0.2, 0.2, 0.2);
 	glPointSize(5);
 	glBegin(GL_POINTS);
 	for (const auto& vh : mesh.vertices())
 	{
-		glNormal3dv(mesh.normal(vh).data());
-		glVertex3dv(mesh.point(vh).data());
+		if (vertexState[vh] == NotSelected)
+		{
+			glNormal3dv(mesh.normal(vh).data());
+			glVertex3dv(mesh.point(vh).data());
+		}
+	}
+	glEnd();
+	glColor3d(0.0, 0.0, 0.7);
+	glPointSize(10);
+	glBegin(GL_POINTS);
+	for (const auto& vh : mesh.vertices())
+	{
+		if (vertexState[vh] == Fixed)
+		{
+			glNormal3dv(mesh.normal(vh).data());
+			glVertex3dv(mesh.point(vh).data());
+		}
+	}
+	glColor3d(0.7, 0.7, 0.0);
+	glPointSize(10);
+	glBegin(GL_POINTS);
+	for (const auto& vh : mesh.vertices())
+	{
+		if (vertexState[vh] == Custom)
+		{
+			glNormal3dv(mesh.normal(vh).data());
+			glVertex3dv(mesh.point(vh).data());
+		}
 	}
 	glEnd();
 }
 
-void MeshViewerWidget::DrawWireframe(void) const
+void MeshViewerWidget::DrawWireframe(void)
 {
 	glColor3d(0.2, 0.2, 0.2);
 	glBegin(GL_LINES);
@@ -225,9 +432,10 @@ void MeshViewerWidget::DrawWireframe(void) const
 		glVertex3dv(mesh.point(vh1).data());
 	}
 	glEnd();
+	DrawPoints();
 }
 
-void MeshViewerWidget::DrawHiddenLines() const
+void MeshViewerWidget::DrawHiddenLines()
 {
 	glLineWidth(1.0);
 	float backcolor[4];
@@ -252,7 +460,7 @@ void MeshViewerWidget::DrawHiddenLines() const
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
-void MeshViewerWidget::DrawFlatLines(void) const
+void MeshViewerWidget::DrawFlatLines(void)
 {
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.5f, 2.0f);
@@ -273,7 +481,7 @@ void MeshViewerWidget::DrawFlatLines(void) const
 	}
 }
 
-void MeshViewerWidget::DrawFlat(void) const
+void MeshViewerWidget::DrawFlat(void)
 {
 	glBegin(GL_TRIANGLES);
 	for (const auto& fh : mesh.faces())
@@ -285,9 +493,10 @@ void MeshViewerWidget::DrawFlat(void) const
 		}
 	}
 	glEnd();
+	DrawPoints();
 }
 
-void MeshViewerWidget::DrawSmooth(void) const
+void MeshViewerWidget::DrawSmooth(void)
 {
 	glColor3d(0.8, 0.8, 0.8);
 	glShadeModel(GL_SMOOTH);
@@ -307,6 +516,7 @@ void MeshViewerWidget::DrawSmooth(void) const
 	}
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
+	DrawPoints();
 }
 
 void MeshViewerWidget::DrawBoundingBox(void) const

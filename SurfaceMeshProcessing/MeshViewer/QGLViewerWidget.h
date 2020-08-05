@@ -1,6 +1,7 @@
 #pragma once
 #include <OpenMesh/Core/Geometry/VectorT.hh>
 #include <QOpenGLWidget>
+#include <GL/GLU.h>
 class QOpenGLTexture;
 
 class QGLViewerWidget : public QOpenGLWidget
@@ -54,6 +55,8 @@ private:
 public:
 	void SetScenePosition(const OpenMesh::Vec3d & c, const double & r);
 	void ViewAll(void);
+	void WinCor2ObjCor(int x, int y, OpenMesh::Vec3d& objCor, double& depth);
+	void WinCor2ObjCor(int x, int y, double givenDepth, OpenMesh::Vec3d& objCor);
 protected:
 	DrawMode drawmode;
 	ProjectionMode projectionmode;

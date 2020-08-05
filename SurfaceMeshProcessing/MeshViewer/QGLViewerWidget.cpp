@@ -196,9 +196,9 @@ void QGLViewerWidget::initializeGL(void)
 	// OpenGL state
 	glClearColor(1.0, 1.0, 1.0, 0.0);
 	glClearDepth(1.0);
-	//glDisable(GL_DITHER);
+	glDisable(GL_DITHER);
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_MULTISAMPLE);
+	//glEnable(GL_MULTISAMPLE);
 	glEnable(GL_LINE_SMOOTH);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -504,3 +504,30 @@ void QGLViewerWidget::ViewAll(void)
 	glMultMatrixd(&modelviewmatrix[0]);
 	glGetDoublev(GL_MODELVIEW_MATRIX, &modelviewmatrix[0]);
 }
+
+void QGLViewerWidget::WinCor2ObjCor(int x, int y, OpenMesh::Vec3d& objCor, double& depth)
+{
+	int viewport[4];
+	GLfloat z = 0;
+	GLdouble objx, objy, objz;
+	makeCurrent();
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	glReadBuffer(GL_FRONT);
+	glReadPixels(x, viewport[3] - y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &z);
+	gluUnProject(x, viewport[3] - y, z, &modelviewmatrix[0], &projectionmatrix[0], viewport, &objx, &objy, &objz);
+	depth = z;
+	objCor = OpenMesh::Vec3d(objx, objy, objz);
+}
+
+void QGLViewerWidget::WinCor2ObjCor(int x, int y, double givenDepth, OpenMesh::Vec3d& objCor)
+{
+	int viewport[4];
+	GLfloat z = givenDepth;
+	GLdouble objx, objy, objz;
+	makeCurrent();
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	gluUnProject(x, viewport[3] - y, z, &modelviewmatrix[0], &projectionmatrix[0], viewport, &objx, &objy, &objz);
+	objCor = OpenMesh::Vec3d(objx, objy, objz);
+}
+
+

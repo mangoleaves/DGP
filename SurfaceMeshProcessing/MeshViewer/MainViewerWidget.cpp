@@ -30,6 +30,13 @@ void MainViewerWidget::CreateParamWidget(void)
 {
 	meshparamwidget = new MeshParamWidget();
 	connect(meshparamwidget, SIGNAL(PrintInfoSignal()), meshviewerwidget, SLOT(PrintMeshInfo()));
+	connect(meshparamwidget, SIGNAL(ClearSignal()), meshviewerwidget, SLOT(ClearSelected()));
+	connect(meshparamwidget, SIGNAL(ClearSignal()), meshviewerwidget, SLOT(SetSMNoSelect()));
+
+	connect(meshparamwidget, SIGNAL(NoSelectSignal()), meshviewerwidget, SLOT(SetSMNoSelect()));
+	connect(meshparamwidget, SIGNAL(SelectFixedSignal()), meshviewerwidget, SLOT(SetSMFixed()));
+	connect(meshparamwidget, SIGNAL(SelectCustomSignal()), meshviewerwidget, SLOT(SetSMCustom()));
+	connect(meshparamwidget, SIGNAL(MoveSignal()), meshviewerwidget, SLOT(SetSMMove()));
 }
 
 void MainViewerWidget::CreateViewerDialog(void)
