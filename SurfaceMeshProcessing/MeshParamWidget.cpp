@@ -4,6 +4,7 @@ MeshParamWidget::MeshParamWidget(QWidget *parent)
 	: QWidget(parent)
 {
 	CreateTabWidget();
+	CreateMorphWidget();
 	CreateLayout();
 }
 
@@ -28,11 +29,36 @@ void MeshParamWidget::CreateTabWidget(void)
 	saParam->setWidgetResizable(true);
 }
 
+void MeshParamWidget::CreateMorphWidget(void)
+{
+	loadSource = new QPushButton(tr("Load Source Mesh"));
+	showSource = new QPushButton(tr("Show Source Mesh"));
+	loadTarget = new QPushButton(tr("Load Target Mesh"));
+	showTarget = new QPushButton(tr("Show Target Mesh"));
+	doMorphing = new QPushButton(tr("Morphing"));
+	connect(loadSource, SIGNAL(clicked()), SIGNAL(LoadSourceSignal()));
+	connect(showSource, SIGNAL(clicked()), SIGNAL(ShowSourceSignal()));
+	connect(loadTarget, SIGNAL(clicked()), SIGNAL(LoadTargetSignal()));
+	connect(showTarget, SIGNAL(clicked()), SIGNAL(ShowTargetSignal()));
+	connect(doMorphing, SIGNAL(clicked()), SIGNAL(DoMorphingSignal()));
+	
+	QVBoxLayout *layout = new QVBoxLayout();
+	layout->addWidget(loadSource);
+	layout->addWidget(showSource);
+	layout->addWidget(loadTarget);
+	layout->addWidget(showTarget);
+	layout->addWidget(doMorphing);
+
+	morphWidget = new QWidget();
+	morphWidget->setLayout(layout);
+}
+
 void MeshParamWidget::CreateLayout(void)
 {
 	twParam = new QTabWidget();
 	twParam->addTab(saParam, "Tab");
 	QGridLayout *layout = new QGridLayout();
 	layout->addWidget(twParam, 0, 0, 1, 1);
+	layout->addWidget(morphWidget, 1, 0, 1, 1);
 	this->setLayout(layout);
 }

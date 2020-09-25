@@ -16,12 +16,19 @@ protected:
 	virtual void CreateParamWidget(void);
 	virtual void CreateViewerDialog(void);
 	virtual void OpenMeshGUI(const QString & fname);
+	virtual void OpenSourceGUI(const QString& fname);
+	virtual void OpenTargetGUI(const QString& fname);
 	virtual void SaveMeshGUI(const QString & fname);
 
 	private slots:
 	void LoadMeshFromInner(bool OK, QString fname);
 	public slots:
 	void Open(void);
+	void OpenSource(void);
+	void ShowSource(void);
+	void OpenTarget(void);
+	void ShowTarget(void);
+	void DoMorphing(void);
 	void Save(void);
 	void ClearMesh(void);
 	void Screenshot(void);

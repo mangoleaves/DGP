@@ -1,5 +1,13 @@
 #pragma once
+#include <iostream>
+#include <vector>
+#include <cmath>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include <OpenMesh/Core/IO/MeshIO.hh>
+#include <OpenMesh/Core/Utils/PropertyManager.hh>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <Eigen/SVD>
 #ifdef _DEBUG
 #pragma comment(lib, "OpenMeshCored.lib")
 #pragma comment(lib, "OpenMeshToolsd.lib")
@@ -33,4 +41,6 @@ public:
 	static int Genus(const Mesh & mesh);
 	static void BoundingBox(const Mesh & mesh, Mesh::Point & bmax, Mesh::Point & bmin);
 	static void Reassign(const Mesh & mesh1, Mesh & mesh2);
+	// morphing
+	static void CalcFactorMatA(Mesh& sourceMesh, Mesh& targetMesh);
 };

@@ -30,6 +30,11 @@ void MainViewerWidget::CreateParamWidget(void)
 {
 	meshparamwidget = new MeshParamWidget();
 	connect(meshparamwidget, SIGNAL(PrintInfoSignal()), meshviewerwidget, SLOT(PrintMeshInfo()));
+	connect(meshparamwidget, SIGNAL(LoadSourceSignal()), SLOT(OpenSource()));
+	connect(meshparamwidget, SIGNAL(ShowSourceSignal()), SLOT(ShowSource()));
+	connect(meshparamwidget, SIGNAL(LoadTargetSignal()), SLOT(OpenTarget()));
+	connect(meshparamwidget, SIGNAL(ShowTargetSignal()), SLOT(ShowTarget()));
+	connect(meshparamwidget, SIGNAL(DoMorphingSignal()), SLOT(DoMorphing()));
 }
 
 void MainViewerWidget::CreateViewerDialog(void)
@@ -42,6 +47,34 @@ void MainViewerWidget::CreateViewerDialog(void)
 void MainViewerWidget::OpenMeshGUI(const QString & fname)
 {
 	if (fname.isEmpty() || !meshviewerwidget->LoadMesh(fname.toStdString()))
+	{
+		QString msg = "Cannot read mesh from file:\n '" + fname + "'";
+		QMessageBox::critical(NULL, windowTitle(), msg);
+	}
+	else
+	{
+		loadmeshsuccess = true;
+		emit(haveLoadMesh(fname));
+	}
+}
+
+void MainViewerWidget::OpenSourceGUI(const QString& fname)
+{
+	if (fname.isEmpty() || !meshviewerwidget->LoadSource(fname.toStdString()))
+	{
+		QString msg = "Cannot read mesh from file:\n '" + fname + "'";
+		QMessageBox::critical(NULL, windowTitle(), msg);
+	}
+	else
+	{
+		loadmeshsuccess = true;
+		emit(haveLoadMesh(fname));
+	}
+}
+
+void MainViewerWidget::OpenTargetGUI(const QString& fname)
+{
+	if (fname.isEmpty() || !meshviewerwidget->LoadTarget(fname.toStdString()))
 	{
 		QString msg = "Cannot read mesh from file:\n '" + fname + "'";
 		QMessageBox::critical(NULL, windowTitle(), msg);
@@ -83,6 +116,55 @@ void MainViewerWidget::Open(void)
 	{
 		OpenMeshGUI(fileName);
 	}
+}
+
+void MainViewerWidget::OpenSource(void)
+{
+	QString fileName = QFileDialog::getOpenFileName(this,
+		tr("Open mesh file"),
+		tr(""),
+		tr("Mesh Files (*.obj *.off *.ply *.stl);;"
+		"OFF Files (*.off);;"
+		"OBJ Files (*.obj);;"
+		"PLY Files (*.ply);;"
+		"STL Files (*.stl);;"
+		"All Files (*)"));
+	if (!fileName.isEmpty())
+	{
+		OpenSourceGUI(fileName);
+	}
+}
+
+void MainViewerWidget::ShowSource(void)
+{
+	meshviewerwidget->ShowSource();
+}
+
+void MainViewerWidget::OpenTarget(void)
+{
+	QString fileName = QFileDialog::getOpenFileName(this,
+		tr("Open mesh file"),
+		tr(""),
+		tr("Mesh Files (*.obj *.off *.ply *.stl);;"
+		"OFF Files (*.off);;"
+		"OBJ Files (*.obj);;"
+		"PLY Files (*.ply);;"
+		"STL Files (*.stl);;"
+		"All Files (*)"));
+	if (!fileName.isEmpty())
+	{
+		OpenTargetGUI(fileName);
+	}
+}
+
+void MainViewerWidget::ShowTarget(void)
+{
+	meshviewerwidget->ShowTarget();
+}
+
+void MainViewerWidget::DoMorphing(void)
+{
+	meshviewerwidget->DoMorphing();
 }
 
 void MainViewerWidget::Save(void)

@@ -394,3 +394,51 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 		mesh2.add_face(vhs);
 	}
 }
+
+void MeshTools::CalcFactorMatA(Mesh& sourceMesh, Mesh& targetMesh)
+{
+	// 计算source到target每个三角面的仿射变换矩阵A和平移向量l
+	auto vecl = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, Eigen::Vector2d>(sourceMesh,"translationVec");
+	auto rotationAngle = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, double>(sourceMesh, "rotationAngle");
+	auto matS = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(sourceMesh, "matS");
+
+	// 先用 A·p + l = q解出A和l
+	// 遍历每个面
+	for (auto sourceFace : sourceMesh.faces())
+	{
+		auto targetFace = targetMesh.face_handle(sourceFace.idx());
+		Eigen::Matrix3d CoeMat;
+		Eigen::Vector3d qx, qy;
+		Eigen::Matrix2d matA;
+		// 获取每个面的三个顶点
+		std::vector<Mesh::Point> sourcePoints, targetPoints;
+		for (auto fvIter = sourceMesh.fv_begin(sourceFace); fvIter.is_valid(); fvIter++)
+		{
+			sourcePoints.push_back(sourceMesh.point(*fvIter));
+			targetPoints.push_back(targetMesh.point(targetMesh.vertex_handle((*fvIter).idx())));
+		}
+		// 构造Coe、qx和qy
+		CoeMat << sourcePoints[0][0], sourcePoints[0][1], 1,
+			sourcePoints[1][0], sourcePoints[1][1], 1,
+			sourcePoints[2][0], sourcePoints[2][1], 1;
+		qx << targetPoints[0][0], targetPoints[1][0], targetPoints[2][0];
+		qy << targetPoints[0][1], targetPoints[1][1], targetPoints[2][1];
+		// 解方程组
+		auto solx = CoeMat.colPivHouseholderQr().solve(qx);
+		matA(0, 0) = solx[0];
+		matA(0, 1) = solx[1];
+		vecl[sourceFace](0) = solx[2];
+		auto soly = CoeMat.colPivHouseholderQr().solve(qy);
+		matA(1, 0) = soly[0];
+		matA(1, 1) = soly[1];
+		vecl[sourceFace](1) = soly[2];
+		// SVD分解matA
+		Eigen::JacobiSVD<Eigen::Matrix2d> svd(matA, Eigen::ComputeThinU | Eigen::ComputeThinV);
+		// 重新组合得到矩阵R和S
+		Eigen::Matrix2d R, S;
+		R = svd.matrixU() * svd.matrixV().transpose();
+		matS[sourceFace] = svd.matrixV() * svd.singularValues().asDiagonal() * svd.matrixV().transpose();
+		rotationAngle[sourceFace] = std::acos(R(0, 0));
+	}
+}
+

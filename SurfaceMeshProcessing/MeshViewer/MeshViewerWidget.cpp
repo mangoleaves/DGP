@@ -1,4 +1,5 @@
 #include <QtCore>
+#include <QMessageBox>
 #include <OpenMesh/Core/IO/MeshIO.hh>
 #include "MeshViewerWidget.h"
 
@@ -9,7 +10,9 @@ MeshViewerWidget::MeshViewerWidget(QWidget* parent)
 	isEnableLighting(true),
 	isTwoSideLighting(false),
 	isDrawBoundingBox(false),
-	isDrawBoundary(false)
+	isDrawBoundary(false),
+	isLoadSource(false),
+	isLoadTarget(false)
 {
 }
 
@@ -33,6 +36,77 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		return true;
 	}
 	return false;
+}
+
+bool MeshViewerWidget::LoadSource(const std::string& filename)
+{
+	if (LoadMesh(filename))
+	{
+		sourceMesh.assign(mesh);
+		isLoadSource = true;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+void MeshViewerWidget::ShowSource()
+{
+	if (isLoadSource)
+	{
+		mesh.assign(sourceMesh);
+		UpdateMesh();
+		update();
+	}
+	else
+	{
+		QMessageBox::critical(NULL, "Warning", "No Source Mesh.");
+	}
+}
+
+bool MeshViewerWidget::LoadTarget(const std::string& filename)
+{
+	if (LoadMesh(filename))
+	{
+		targetMesh.assign(mesh);
+		isLoadTarget = true;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+void MeshViewerWidget::ShowTarget()
+{
+	if (isLoadTarget)
+	{
+		mesh.assign(targetMesh);
+		UpdateMesh();
+		update();
+	}
+	else
+	{
+		QMessageBox::critical(NULL, "Warning", "No Target Mesh.");
+	}
+}
+
+void MeshViewerWidget::DoMorphing()
+{
+	// step 1
+	// 求source到target每个三角面的变形矩阵A
+	// 对A分解，得到R·S，记录插值参数
+	MeshTools::CalcFactorMatA(sourceMesh, targetMesh);
+
+	// step 3
+	// 选择固定点，线性插值
+	// 构造H矩阵，部分G矩阵
+
+	// step 4
+	// 随t变化，构造完整G矩阵，解方程组，更新坐标
 }
 
 void MeshViewerWidget::Clear(void)

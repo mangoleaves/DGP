@@ -10,6 +10,11 @@ public:
 	MeshViewerWidget(QWidget* parent = 0);
 	virtual ~MeshViewerWidget(void);
 	bool LoadMesh(const std::string & filename);
+	bool LoadSource(const std::string& filename);
+	void ShowSource();
+	bool LoadTarget(const std::string& filename);
+	void ShowTarget();
+	void DoMorphing();
 	void Clear(void);
 	void UpdateMesh(void);
 	bool SaveMesh(const std::string & filename);
@@ -41,6 +46,8 @@ private:
 	void DrawBoundary(void) const;
 protected:
 	Mesh mesh;
+	Mesh sourceMesh, targetMesh;
+	bool isLoadSource, isLoadTarget;
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;
