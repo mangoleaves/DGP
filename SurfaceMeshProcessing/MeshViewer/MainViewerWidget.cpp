@@ -34,7 +34,7 @@ void MainViewerWidget::CreateParamWidget(void)
 	connect(meshparamwidget, SIGNAL(ShowSourceSignal()), SLOT(ShowSource()));
 	connect(meshparamwidget, SIGNAL(LoadTargetSignal()), SLOT(OpenTarget()));
 	connect(meshparamwidget, SIGNAL(ShowTargetSignal()), SLOT(ShowTarget()));
-	connect(meshparamwidget, SIGNAL(InitMorphingSignal()), SLOT(InitMorphing()));
+	connect(meshparamwidget, SIGNAL(InitMorphingSignal(double)), SLOT(InitMorphing(double)));
 	connect(meshparamwidget, SIGNAL(DoMorphingSignal()), SLOT(DoMorphing()));
 }
 
@@ -163,9 +163,9 @@ void MainViewerWidget::ShowTarget(void)
 	meshviewerwidget->ShowTarget();
 }
 
-void MainViewerWidget::InitMorphing(void)
+void MainViewerWidget::InitMorphing(double interval)
 {
-	meshviewerwidget->InitMorphing();
+	meshviewerwidget->InitMorphing(interval);
 }
 
 void MainViewerWidget::DoMorphing(void)

@@ -21,8 +21,10 @@ signals:
 	void ShowSourceSignal();
 	void LoadTargetSignal();
 	void ShowTargetSignal();
-	void InitMorphingSignal();
+	void InitMorphingSignal(double interval);
 	void DoMorphingSignal();
+private slots:
+	void EmitInitSignal(void);
 private:
 	QTabWidget *twParam;
 	QWidget *wParam;
@@ -30,4 +32,5 @@ private:
 	QPushButton *pbPrintInfo;
 	QWidget* morphWidget;
 	QPushButton* loadSource, * showSource, * loadTarget, * showTarget, * initMorphing, * doMorphing;
+	QLineEdit* intervalLE;
 };

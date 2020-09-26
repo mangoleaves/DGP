@@ -37,18 +37,27 @@ void MeshParamWidget::CreateMorphWidget(void)
 	showTarget = new QPushButton(tr("Show Target Mesh"));
 	initMorphing = new QPushButton(tr("Init"));
 	doMorphing = new QPushButton(tr("Morphing"));
+
 	connect(loadSource, SIGNAL(clicked()), SIGNAL(LoadSourceSignal()));
 	connect(showSource, SIGNAL(clicked()), SIGNAL(ShowSourceSignal()));
 	connect(loadTarget, SIGNAL(clicked()), SIGNAL(LoadTargetSignal()));
 	connect(showTarget, SIGNAL(clicked()), SIGNAL(ShowTargetSignal()));
-	connect(initMorphing, SIGNAL(clicked()), SIGNAL(InitMorphingSignal()));
+	connect(initMorphing, SIGNAL(clicked()), this, SLOT(EmitInitSignal()));
 	connect(doMorphing, SIGNAL(clicked()), SIGNAL(DoMorphingSignal()));
+
+	QLabel* intervalLbl = new QLabel("Interval:");
+	intervalLE = new QLineEdit();
+	QDoubleValidator* dv = new QDoubleValidator(0.0, 1.0, 3, this);
+	intervalLE->setPlaceholderText("0.0~1.0, default 0.1");
+	intervalLE->setValidator(dv);
 	
 	QVBoxLayout *layout = new QVBoxLayout();
 	layout->addWidget(loadSource);
 	layout->addWidget(showSource);
 	layout->addWidget(loadTarget);
 	layout->addWidget(showTarget);
+	layout->addWidget(intervalLbl);
+	layout->addWidget(intervalLE);
 	layout->addWidget(initMorphing);
 	layout->addWidget(doMorphing);
 
@@ -64,4 +73,18 @@ void MeshParamWidget::CreateLayout(void)
 	layout->addWidget(twParam, 0, 0, 1, 1);
 	layout->addWidget(morphWidget, 1, 0, 1, 1);
 	this->setLayout(layout);
+}
+
+void MeshParamWidget::EmitInitSignal(void)
+{
+	QString intervalStr = intervalLE->text();
+	if (intervalStr.isEmpty())
+	{
+		emit InitMorphingSignal(0.1);
+	}
+	else
+	{
+		double interval = intervalStr.toDouble();
+		emit InitMorphingSignal(interval);
+	}
 }

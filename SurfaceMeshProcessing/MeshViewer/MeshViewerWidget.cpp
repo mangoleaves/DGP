@@ -97,7 +97,7 @@ void MeshViewerWidget::ShowTarget()
 	}
 }
 
-void MeshViewerWidget::InitMorphing()
+void MeshViewerWidget::InitMorphing(double interval)
 {
 	if (isLoadSource && isLoadTarget && !isInit)
 	{
@@ -112,7 +112,7 @@ void MeshViewerWidget::InitMorphing()
 		//std::cout << "H:" << std::endl << H << std::endl;
 
 		t = 0;
-		deltat = 0.1;
+		deltat = interval;
 
 		isInit = true;
 	}

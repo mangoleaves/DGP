@@ -14,7 +14,7 @@ public:
 	void ShowSource();
 	bool LoadTarget(const std::string& filename);
 	void ShowTarget();
-	void InitMorphing();
+	void InitMorphing(double interval);
 	void DoMorphing();
 	void Clear(void);
 	void UpdateMesh(void);
