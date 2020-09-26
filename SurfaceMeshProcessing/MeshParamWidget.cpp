@@ -35,11 +35,13 @@ void MeshParamWidget::CreateMorphWidget(void)
 	showSource = new QPushButton(tr("Show Source Mesh"));
 	loadTarget = new QPushButton(tr("Load Target Mesh"));
 	showTarget = new QPushButton(tr("Show Target Mesh"));
+	initMorphing = new QPushButton(tr("Init"));
 	doMorphing = new QPushButton(tr("Morphing"));
 	connect(loadSource, SIGNAL(clicked()), SIGNAL(LoadSourceSignal()));
 	connect(showSource, SIGNAL(clicked()), SIGNAL(ShowSourceSignal()));
 	connect(loadTarget, SIGNAL(clicked()), SIGNAL(LoadTargetSignal()));
 	connect(showTarget, SIGNAL(clicked()), SIGNAL(ShowTargetSignal()));
+	connect(initMorphing, SIGNAL(clicked()), SIGNAL(InitMorphingSignal()));
 	connect(doMorphing, SIGNAL(clicked()), SIGNAL(DoMorphingSignal()));
 	
 	QVBoxLayout *layout = new QVBoxLayout();
@@ -47,6 +49,7 @@ void MeshParamWidget::CreateMorphWidget(void)
 	layout->addWidget(showSource);
 	layout->addWidget(loadTarget);
 	layout->addWidget(showTarget);
+	layout->addWidget(initMorphing);
 	layout->addWidget(doMorphing);
 
 	morphWidget = new QWidget();

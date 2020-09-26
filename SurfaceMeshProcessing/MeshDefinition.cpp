@@ -439,6 +439,10 @@ void MeshTools::CalcFactorMatA(Mesh& sourceMesh, Mesh& targetMesh)
 		R = svd.matrixU() * svd.matrixV().transpose();
 		matS[sourceFace] = svd.matrixV() * svd.singularValues().asDiagonal() * svd.matrixV().transpose();
 		rotationAngle[sourceFace] = std::acos(R(0, 0));
+		if (R(1, 0) < 0)
+		{
+			rotationAngle[sourceFace] = -rotationAngle[sourceFace];
+		}
 	}
 }
 
@@ -450,6 +454,7 @@ void MeshTools::CalcMatH(Mesh& sourceMesh, int& pdVidx, Eigen::MatrixXd& H)
 	H = Eigen::MatrixXd::Zero(sourceMesh.n_vertices() - 1, sourceMesh.n_vertices() - 1);
 
 	// 遍历每个顶点，以顶点序（对应H的每一行）构造H
+	/* 顶点序会有重复计算，改以面序构造H，效率更高
 	for (auto Vi : sourceMesh.vertices())
 	{
 		if (Vi.idx() == pdVidx)
@@ -489,6 +494,76 @@ void MeshTools::CalcMatH(Mesh& sourceMesh, int& pdVidx, Eigen::MatrixXd& H)
 				H(Vi.idx(), Vk.idx()) += coeix * coekx + coeiy * coeky;
 			}
 		}
+	}
+	*/
+	for (auto fh : sourceMesh.faces())
+	{
+		std::vector<OpenMesh::VertexHandle> vertices;
+		for (auto fvIter = sourceMesh.fv_begin(fh); fvIter.is_valid(); fvIter++)
+		{
+			vertices.push_back(*fvIter);
+		}
+		OpenMesh::VertexHandle Vi = vertices[0];
+		OpenMesh::VertexHandle Vj = vertices[1];
+		OpenMesh::VertexHandle Vk = vertices[2];
+
+		auto pi = sourceMesh.point(Vi);
+		auto pj = sourceMesh.point(Vj);
+		auto pk = sourceMesh.point(Vk);
+
+		double denominator = (pi[0] - pj[0]) * (pj[1] - pk[1]) - (pi[1] - pj[1]) * (pj[0] - pk[0]);
+
+		double coeix = (pk[0] - pj[0]) / denominator;
+		double coejx = (pi[0] - pk[0]) / denominator;
+		double coekx = (pj[0] - pi[0]) / denominator;
+
+		double coeiy = (pj[1] - pk[1]) / denominator;
+		double coejy = (pk[1] - pi[1]) / denominator;
+		double coeky = (pi[1] - pj[1]) / denominator;
+
+		double crossij = coeix * coejx + coeiy * coejy;
+		double crossik = coeix * coekx + coeiy * coeky;
+		double crossjk = coejx * coekx + coejy * coeky;
+
+		if (Vi.idx() != pdVidx && Vj.idx() != pdVidx && Vk.idx() != pdVidx)
+		{
+			H(Vi.idx(), Vi.idx()) += std::pow(coeix, 2) + std::pow(coeiy, 2);
+			H(Vi.idx(), Vj.idx()) += crossij;
+			H(Vi.idx(), Vk.idx()) += crossik;
+
+			H(Vj.idx(), Vj.idx()) += std::pow(coejx, 2) + std::pow(coejy, 2);
+			H(Vj.idx(), Vi.idx()) += crossij;
+			H(Vj.idx(), Vk.idx()) += crossjk;
+
+			H(Vk.idx(), Vk.idx()) += std::pow(coekx, 2) + std::pow(coeky, 2);
+			H(Vk.idx(), Vi.idx()) += crossik;
+			H(Vk.idx(), Vj.idx()) += crossjk;
+		}
+		else if (Vi.idx() == pdVidx)
+		{
+			H(Vj.idx(), Vj.idx()) += std::pow(coejx, 2) + std::pow(coejy, 2);
+			H(Vj.idx(), Vk.idx()) += crossjk;
+
+			H(Vk.idx(), Vk.idx()) += std::pow(coekx, 2) + std::pow(coeky, 2);
+			H(Vk.idx(), Vj.idx()) += crossjk;
+		}
+		else if (Vj.idx() == pdVidx)
+		{
+			H(Vi.idx(), Vi.idx()) += std::pow(coeix, 2) + std::pow(coeiy, 2);
+			H(Vi.idx(), Vk.idx()) += crossik;
+
+			H(Vk.idx(), Vk.idx()) += std::pow(coekx, 2) + std::pow(coeky, 2);
+			H(Vk.idx(), Vi.idx()) += crossik;
+		}
+		else if (Vk.idx() == pdVidx)
+		{
+			H(Vi.idx(), Vi.idx()) += std::pow(coeix, 2) + std::pow(coeiy, 2);
+			H(Vi.idx(), Vj.idx()) += crossij;
+
+			H(Vj.idx(), Vj.idx()) += std::pow(coejx, 2) + std::pow(coejy, 2);
+			H(Vj.idx(), Vi.idx()) += crossij;
+		}
+
 	}
 }
 

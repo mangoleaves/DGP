@@ -21,6 +21,7 @@ signals:
 	void ShowSourceSignal();
 	void LoadTargetSignal();
 	void ShowTargetSignal();
+	void InitMorphingSignal();
 	void DoMorphingSignal();
 private:
 	QTabWidget *twParam;
@@ -28,5 +29,5 @@ private:
 	QScrollArea *saParam;
 	QPushButton *pbPrintInfo;
 	QWidget* morphWidget;
-	QPushButton* loadSource, * showSource, * loadTarget, * showTarget, * doMorphing;
+	QPushButton* loadSource, * showSource, * loadTarget, * showTarget, * initMorphing, * doMorphing;
 };

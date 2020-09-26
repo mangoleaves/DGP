@@ -14,6 +14,7 @@ public:
 	void ShowSource();
 	bool LoadTarget(const std::string& filename);
 	void ShowTarget();
+	void InitMorphing();
 	void DoMorphing();
 	void Clear(void);
 	void UpdateMesh(void);
@@ -47,7 +48,10 @@ private:
 protected:
 	Mesh mesh;
 	Mesh sourceMesh, targetMesh;
-	bool isLoadSource, isLoadTarget;
+	bool isLoadSource, isLoadTarget, isInit;
+	int pdVidx;
+	Eigen::ColPivHouseholderQR<Eigen::MatrixXd> Hqr;
+	double t, deltat;
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;

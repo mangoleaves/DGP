@@ -28,6 +28,7 @@ protected:
 	void ShowSource(void);
 	void OpenTarget(void);
 	void ShowTarget(void);
+	void InitMorphing(void);
 	void DoMorphing(void);
 	void Save(void);
 	void ClearMesh(void);

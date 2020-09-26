@@ -12,7 +12,8 @@ MeshViewerWidget::MeshViewerWidget(QWidget* parent)
 	isDrawBoundingBox(false),
 	isDrawBoundary(false),
 	isLoadSource(false),
-	isLoadTarget(false)
+	isLoadTarget(false),
+	isInit(false)
 {
 }
 
@@ -44,6 +45,7 @@ bool MeshViewerWidget::LoadSource(const std::string& filename)
 	{
 		sourceMesh.assign(mesh);
 		isLoadSource = true;
+		isInit = false;
 		return true;
 	}
 	else
@@ -57,7 +59,7 @@ void MeshViewerWidget::ShowSource()
 	if (isLoadSource)
 	{
 		mesh.assign(sourceMesh);
-		UpdateMesh();
+		//UpdateMesh();
 		update();
 	}
 	else
@@ -72,6 +74,7 @@ bool MeshViewerWidget::LoadTarget(const std::string& filename)
 	{
 		targetMesh.assign(mesh);
 		isLoadTarget = true;
+		isInit = false;
 		return true;
 	}
 	else
@@ -85,7 +88,7 @@ void MeshViewerWidget::ShowTarget()
 	if (isLoadTarget)
 	{
 		mesh.assign(targetMesh);
-		UpdateMesh();
+		//UpdateMesh();
 		update();
 	}
 	else
@@ -94,44 +97,54 @@ void MeshViewerWidget::ShowTarget()
 	}
 }
 
+void MeshViewerWidget::InitMorphing()
+{
+	if (isLoadSource && isLoadTarget && !isInit)
+	{
+		// 求source到target每个三角面的变形矩阵A
+		// 对A分解，得到R·S，记录插值参数
+		MeshTools::CalcFactorMatA(sourceMesh, targetMesh);
+
+		// 选取预定义点，构造H
+		Eigen::MatrixXd H;
+		MeshTools::CalcMatH(sourceMesh, pdVidx, H);
+		Hqr.compute(H);
+		//std::cout << "H:" << std::endl << H << std::endl;
+
+		t = 0;
+		deltat = 0.1;
+
+		isInit = true;
+	}
+}
+
 void MeshViewerWidget::DoMorphing()
 {
-	// 求source到target每个三角面的变形矩阵A
-	// 对A分解，得到R·S，记录插值参数
-	MeshTools::CalcFactorMatA(sourceMesh, targetMesh);
-
-	// 选取预定义点，构造H
-	int pdVidx;
-	Eigen::MatrixXd H;
-	MeshTools::CalcMatH(sourceMesh, pdVidx, H);
-	//std::cout << "H:" << std::endl << H << std::endl;
-	// 随t变化，构造G矩阵，解方程组，更新坐标
-	auto theta = OpenMesh::getProperty<OpenMesh::FaceHandle, double>(sourceMesh, "rotationAngle");
-	auto matS = OpenMesh::getProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(sourceMesh, "matS");
-	double deltat = 0.01;
-	for (double t = 0; t <= 1; t += deltat)
-	{
+	t += deltat;
+	if (isInit && t<1) {
+		// 随t变化，构造G矩阵，解方程组，更新坐标
+		auto theta = OpenMesh::getProperty<OpenMesh::FaceHandle, double>(sourceMesh, "rotationAngle");
+		auto matS = OpenMesh::getProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(sourceMesh, "matS");
 		// 插值A(t)
 		auto matAt = OpenMesh::makeTemporaryProperty<OpenMesh::FaceHandle, Eigen::Matrix2d>(sourceMesh);
 		for (auto fh : sourceMesh.faces())
 		{
 			double itpTheta = theta[fh] * t;
 			Eigen::Matrix2d R;
-			R << cos(itpTheta), sin(itpTheta),
-				-sin(itpTheta), cos(itpTheta);
+			R << cos(itpTheta), -sin(itpTheta),
+				sin(itpTheta), cos(itpTheta);
 			Eigen::Matrix2d S;
 			S = (1 - t) * Eigen::Matrix2d::Identity() + t * matS[fh];
 			matAt[fh] = R * S;
-	//		std::cout << "interpolation A:" << std::endl << matAt[fh] << std::endl;
 		}
 		// 插值预定义点
 		Mesh::Point pdP = sourceMesh.point(sourceMesh.vertex_handle(pdVidx));
 		Mesh::Point targetP = targetMesh.point(targetMesh.vertex_handle(pdVidx));
 		pdP += (targetP - pdP) * t;
-	//	std::cout << "interpolation point:" << std::endl << pdP << std::endl;
 		// 构造G
 		Eigen::VectorXd Gx = Eigen::VectorXd::Zero(sourceMesh.n_vertices() - 1);
 		Eigen::VectorXd Gy = Eigen::VectorXd::Zero(sourceMesh.n_vertices() - 1);
+		/* 顶点序构造G效率低下，采用面序构造G
 		for (auto Vi : sourceMesh.vertices())
 		{
 			if (Vi.idx() == pdVidx)
@@ -176,16 +189,19 @@ void MeshViewerWidget::DoMorphing()
 				}
 			}
 		}
-	//	std::cout << "Gx:" << std::endl << Gx << std::endl << "Gy:" << std::endl << Gy << std::endl;
-		// 解方程组
-		Eigen::VectorXd solx = H.colPivHouseholderQr().solve(Gx);
-		Eigen::VectorXd soly = H.colPivHouseholderQr().solve(Gy);
-	//	std::cout << "solution x:" << std::endl << solx << std::endl << "solution y:" << std::endl << soly << std::endl;
+		*/
+		// ps: 以下多数语句都可用数组+循环简化，不过考虑可读性还是写完整了
+		for (auto fh : sourceMesh.faces())
 		{
-			/*
-			auto Vi = sourceMesh.vertex_handle(0);
-			auto Vj = sourceMesh.vertex_handle(1);
-			auto Vk = sourceMesh.vertex_handle(2);
+			std::vector<OpenMesh::VertexHandle> vertices;
+			for (auto fvIter = sourceMesh.fv_begin(fh); fvIter.is_valid(); fvIter++)
+			{
+				vertices.push_back(*fvIter);
+			}
+			OpenMesh::VertexHandle Vi = vertices[0];
+			OpenMesh::VertexHandle Vj = vertices[1];
+			OpenMesh::VertexHandle Vk = vertices[2];
+
 			auto pi = sourceMesh.point(Vi);
 			auto pj = sourceMesh.point(Vj);
 			auto pk = sourceMesh.point(Vk);
@@ -200,22 +216,59 @@ void MeshViewerWidget::DoMorphing()
 			double coejy = (pk[1] - pi[1]) / denominator;
 			double coeky = (pi[1] - pj[1]) / denominator;
 
-			double b1 = solx[0] * coeiy + solx[1] * coejy + pdP[0] * coeky;
-			double b2 = solx[0] * coeix + solx[1] * coejx + pdP[0] * coekx;
-			double b3 = soly[0] * coeiy + soly[1] * coejy + pdP[1] * coeky;
-			double b4 = soly[0] * coeix + soly[1] * coejx + pdP[1] * coekx;
-			*/
-		//	std::cout << "B:" << std::endl << b1 << "," << b2 << std::endl << b3 << "," << b4 << std::endl;
+			auto At = matAt[fh];
+
+			if (Vi.idx() != pdVidx)
+			{
+				Gx[Vi.idx()] += At(0, 0) * coeiy + At(0, 1) * coeix;
+				Gy[Vi.idx()] += At(1, 0) * coeiy + At(1, 1) * coeix;
+			}
+			else
+			{
+				Gx[Vj.idx()] -= pdP[0] * (coeix * coejx + coeiy * coejy);
+				Gy[Vj.idx()] -= pdP[1] * (coeix * coejx + coeiy * coejy);
+				Gx[Vk.idx()] -= pdP[0] * (coeix * coekx + coeiy * coeky);
+				Gy[Vk.idx()] -= pdP[1] * (coeix * coekx + coeiy * coeky);
+			}
+			if (Vj.idx() != pdVidx)
+			{
+				Gx[Vj.idx()] += At(0, 0) * coejy + At(0, 1) * coejx;
+				Gy[Vj.idx()] += At(1, 0) * coejy + At(1, 1) * coejx;
+			}
+			else
+			{
+				Gx[Vi.idx()] -= pdP[0] * (coejx * coeix + coejy * coeiy);
+				Gy[Vi.idx()] -= pdP[1] * (coejx * coeix + coejy * coeiy);
+				Gx[Vk.idx()] -= pdP[0] * (coejx * coekx + coejy * coeky);
+				Gy[Vk.idx()] -= pdP[1] * (coejx * coekx + coejy * coeky);
+			}
+			if (Vk.idx() != pdVidx)
+			{
+				Gx[Vk.idx()] += At(0, 0) * coeky + At(0, 1) * coekx;
+				Gy[Vk.idx()] += At(1, 0) * coeky + At(1, 1) * coekx;
+			}
+			else
+			{
+				Gx[Vi.idx()] -= pdP[0] * (coekx * coeix + coeky * coeiy);
+				Gy[Vi.idx()] -= pdP[1] * (coekx * coeix + coeky * coeiy);
+				Gx[Vj.idx()] -= pdP[0] * (coekx * coejx + coeky * coejy);
+				Gy[Vj.idx()] -= pdP[1] * (coekx * coejx + coeky * coejy);
+			}
 		}
+
+		// std::cout << "Gx:" << std::endl << Gx << std::endl << "Gy:" << std::endl << Gy << std::endl;
+		// 解方程组
+		Eigen::VectorXd solx = Hqr.solve(Gx);
+		Eigen::VectorXd soly = Hqr.solve(Gy);
 		// 更新顶点位置
 		mesh.set_point(mesh.vertex_handle(pdVidx), pdP);
 		for (int idx = 0; idx < pdVidx; idx++)
 		{
 			mesh.set_point(mesh.vertex_handle(idx), Mesh::Point(solx[idx], soly[idx], 0));
 		}
-		UpdateMesh();
+		//UpdateMesh();
 		update();
-		Sleep(100);
+		std::cout << t << std::endl;
 	}
 }
 
