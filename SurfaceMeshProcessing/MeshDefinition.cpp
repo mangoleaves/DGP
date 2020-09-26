@@ -433,12 +433,62 @@ void MeshTools::CalcFactorMatA(Mesh& sourceMesh, Mesh& targetMesh)
 		matA(1, 1) = soly[1];
 		vecl[sourceFace](1) = soly[2];
 		// SVD分解matA
-		Eigen::JacobiSVD<Eigen::Matrix2d> svd(matA, Eigen::ComputeThinU | Eigen::ComputeThinV);
+		Eigen::JacobiSVD<Eigen::Matrix2d> svd(matA, Eigen::ComputeFullU | Eigen::ComputeFullV);
 		// 重新组合得到矩阵R和S
 		Eigen::Matrix2d R, S;
 		R = svd.matrixU() * svd.matrixV().transpose();
 		matS[sourceFace] = svd.matrixV() * svd.singularValues().asDiagonal() * svd.matrixV().transpose();
 		rotationAngle[sourceFace] = std::acos(R(0, 0));
+	}
+}
+
+void MeshTools::CalcMatH(Mesh& sourceMesh, int& pdVidx, Eigen::MatrixXd& H)
+{
+	// 选择固定点，线性插值
+	pdVidx = sourceMesh.n_vertices() - 1;		// predetermined vertex index
+	// 构造H矩阵
+	H = Eigen::MatrixXd::Zero(sourceMesh.n_vertices() - 1, sourceMesh.n_vertices() - 1);
+
+	// 遍历每个顶点，以顶点序（对应H的每一行）构造H
+	for (auto Vi : sourceMesh.vertices())
+	{
+		if (Vi.idx() == pdVidx)
+		{
+			continue;
+		}
+		for (auto vvIter = sourceMesh.vv_begin(Vi); vvIter.is_valid(); vvIter++)
+		{
+			auto heH = sourceMesh.find_halfedge(Vi, *vvIter);
+			if (sourceMesh.is_boundary(heH))
+			{
+				continue;
+			}
+			auto Vj = *vvIter;
+			auto Vk = heH.next().to();
+			auto pi = sourceMesh.point(Vi);
+			auto pj = sourceMesh.point(Vj);
+			auto pk = sourceMesh.point(Vk);
+
+			double denominator = (pi[0] - pj[0]) * (pj[1] - pk[1]) - (pi[1] - pj[1]) * (pj[0] - pk[0]);
+
+			double coeix = (pk[0] - pj[0]) / denominator;
+			double coejx = (pi[0] - pk[0]) / denominator;
+			double coekx = (pj[0] - pi[0]) / denominator;
+
+			double coeiy = (pj[1] - pk[1]) / denominator;
+			double coejy = (pk[1] - pi[1]) / denominator;
+			double coeky = (pi[1] - pj[1]) / denominator;
+
+			H(Vi.idx(), Vi.idx()) += std::pow(coeix, 2) + std::pow(coeiy, 2);
+			if (Vj.idx() != pdVidx)
+			{
+				H(Vi.idx(), Vj.idx()) += coeix * coejx + coeiy * coejy;
+			}
+			if (Vk.idx() != pdVidx)
+			{
+				H(Vi.idx(), Vk.idx()) += coeix * coekx + coeiy * coeky;
+			}
+		}
 	}
 }
 

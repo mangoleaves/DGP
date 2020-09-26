@@ -43,4 +43,5 @@ public:
 	static void Reassign(const Mesh & mesh1, Mesh & mesh2);
 	// morphing
 	static void CalcFactorMatA(Mesh& sourceMesh, Mesh& targetMesh);
+	static void CalcMatH(Mesh& sourceMesh, int& pdVidx, Eigen::MatrixXd& H);
 };
