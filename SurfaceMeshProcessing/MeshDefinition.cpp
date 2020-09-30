@@ -394,3 +394,11 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 		mesh2.add_face(vhs);
 	}
 }
+
+void MeshTools::PseudoInverse(Eigen::Matrix3d& A, Eigen::Matrix3d& Apinv)
+{
+	Eigen::JacobiSVD<Eigen::Matrix3d> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+	Apinv = svd.matrixV() *
+		svd.singularValues().asDiagonal().inverse() *
+		svd.matrixU().transpose();
+}
