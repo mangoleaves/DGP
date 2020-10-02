@@ -43,4 +43,45 @@ public:
 	static void Reassign(const Mesh & mesh1, Mesh & mesh2);
 	// pseudo inverse
 	static void PseudoInverse(Eigen::Matrix3d& A, Eigen::Matrix3d& Apinv);
+	// Initialize QEM
+	static void InitQ(Mesh& mesh);
+	// Calculate error
+	static void CalcError(Eigen::Matrix4d& eQ, OpenMesh::Vec3d& vbar, double& error);
+	// Min heap
+	class minHeap
+	{
+	public:
+		struct elem
+		{
+			double error;
+			OpenMesh::SmartEdgeHandle eh;
+
+			elem():error(0), eh(-1) {}
+			elem(double e, OpenMesh::SmartEdgeHandle h): error(e), eh(h) {}
+		};
+		int heap_size;
+		std::vector<elem> heap;
+		OpenMesh::PropertyManager<OpenMesh::EPropHandleT<int>, int> pos;
+	public:
+		minHeap(Mesh& mesh) : heap_size(mesh.n_edges()), pos(mesh, "position") { heap.resize(mesh.n_edges() + 1); }
+
+		inline bool less(elem e1, elem e2)
+		{
+			return e1.error < e2.error;
+		}
+		
+		void make_heap(void);
+		double min_value(void);
+		elem extract_min(void);
+		void set_value(OpenMesh::SmartEdgeHandle eh, double new_value);
+		void delete_elem(OpenMesh::SmartEdgeHandle eh);
+	private:
+		inline int leftc(int i) { return 2 * i; }
+		inline int rightc(int i) { return 2 * i + 1; }
+		inline int parent(int i) { return i >> 1; }
+		void up_move(int idx);
+		void down_move(int idx);
+	};
+	// Simplify
+	static void Simplify(Mesh& mesh, int Nv, double minCost);
 };

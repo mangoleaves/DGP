@@ -26,6 +26,7 @@ signals:
 	void LoadMeshOKSignal(bool, QString);
 public slots:
 	void PrintMeshInfo(void);
+	void Simplify(int Nv, double minCost);
 protected:
 	virtual void DrawScene(void) override;
 	void DrawSceneMesh(void);

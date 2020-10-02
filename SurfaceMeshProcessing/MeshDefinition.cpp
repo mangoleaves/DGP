@@ -397,8 +397,238 @@ void MeshTools::Reassign(const Mesh & mesh1, Mesh & mesh2)
 
 void MeshTools::PseudoInverse(Eigen::Matrix3d& A, Eigen::Matrix3d& Apinv)
 {
-	Eigen::JacobiSVD<Eigen::Matrix3d> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
-	Apinv = svd.matrixV() *
-		svd.singularValues().asDiagonal().inverse() *
-		svd.matrixU().transpose();
+	Eigen::BDCSVD<Eigen::Matrix3d> svd(A, Eigen::ComputeFullU | Eigen::ComputeFullV);
+	Eigen::Index rank = svd.rank();
+	Apinv = svd.matrixV().leftCols(rank) *
+		svd.singularValues().head(rank).asDiagonal().inverse() *
+		svd.matrixU().leftCols(rank).adjoint();
+}
+
+void MeshTools::InitQ(Mesh& mesh)
+{
+	auto faceQ = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, Eigen::Matrix4d>(mesh, "faceQ");
+	auto vertexQ = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, Eigen::Matrix4d>(mesh, "vertexQ");
+	auto edgeQ = OpenMesh::getOrMakeProperty<OpenMesh::EdgeHandle, Eigen::Matrix4d>(mesh, "edgeQ");
+
+	// Init faceQ
+	for (auto fh : mesh.faces())
+	{
+		OpenMesh::Vec3d n = mesh.calc_face_normal(fh);
+		double di = n.dot(mesh.point(*mesh.fv_begin(fh)));
+		Eigen::Vector4d nbar(n[0], n[1], n[2], -di);
+		faceQ[fh] = nbar * nbar.transpose();
+	}
+	// Init vertexQ
+	for (auto vh : mesh.vertices())
+	{
+		vertexQ[vh].setZero();
+		for (auto vfIter = mesh.vf_begin(vh); vfIter.is_valid(); vfIter++)
+		{
+			vertexQ[vh] += faceQ[*vfIter];
+		}
+	}
+	// Init edgeQ
+	for (auto eh : mesh.edges())
+	{
+		edgeQ[eh] = vertexQ[eh.v0()] + vertexQ[eh.v1()];
+	}
+}
+
+void MeshTools::CalcError(Eigen::Matrix4d& eQ, OpenMesh::Vec3d& vbar, double& error)
+{
+	Eigen::Matrix3d A, Apinv;
+	Eigen::Vector3d b;
+	Eigen::Vector4d v;
+
+	A = eQ.block(0, 0, 3, 3);
+	b = -eQ.block(0, 3, 3, 1);
+	PseudoInverse(A, Apinv);
+	v << Apinv * b, 1;
+
+	error = v.transpose() * eQ * v;
+	vbar[0] = v[0];
+	vbar[1] = v[1];
+	vbar[2] = v[2];
+}
+
+void MeshTools::Simplify(Mesh& mesh, int Nv, double minCost)
+{
+	// 初始化所有面、顶点、边的QEM矩阵
+	InitQ(mesh);
+
+	auto faceQ = OpenMesh::getOrMakeProperty<OpenMesh::FaceHandle, Eigen::Matrix4d>(mesh, "faceQ");
+	auto vertexQ = OpenMesh::getOrMakeProperty<OpenMesh::VertexHandle, Eigen::Matrix4d>(mesh, "vertexQ");
+	auto edgeQ = OpenMesh::getOrMakeProperty<OpenMesh::EdgeHandle, Eigen::Matrix4d>(mesh, "edgeQ");
+	auto vbar = OpenMesh::getOrMakeProperty<OpenMesh::EdgeHandle, OpenMesh::Vec3d>(mesh, "vbar");
+	// 计算边上的Error，并建堆
+	minHeap mh(mesh);
+	for (auto eh : mesh.edges())
+	{
+		double error = 0;
+		CalcError(edgeQ[eh], vbar[eh], error);
+		mh.heap[eh.idx() + 1] = minHeap::elem(error, eh);
+	}
+	mh.make_heap();
+	// collapse循环
+	int n = mesh.n_vertices();
+	while (n > Nv && mh.min_value() < minCost)
+	{
+		// 取得最小元素
+		auto min_elem = mh.extract_min();
+		auto heh = min_elem.eh.h0();
+		auto v1 = heh.to();
+		auto vb = vbar[min_elem.eh];
+
+		// 从堆中删去将要被删去的三条边
+		if (!heh.is_boundary())
+		{
+			mh.delete_elem(heh.next().next().edge());
+		}
+		if (!heh.opp().is_boundary())
+		{
+			mh.delete_elem(heh.opp().next().edge());
+		}
+		// collapse
+		mesh.collapse(heh);
+		n--;
+		// 更改新顶点位置
+		mesh.set_point(v1, vb);
+		// 更新新顶点一环邻面的Q
+		for (auto vfIter = mesh.vf_begin(v1); vfIter.is_valid(); vfIter++)
+		{
+			OpenMesh::Vec3d n = mesh.calc_face_normal(*vfIter);
+			double di = n.dot(mesh.point(*mesh.fv_begin(*vfIter)));
+			Eigen::Vector4d nbar(n[0], n[1], n[2], -di);
+			faceQ[*vfIter] = nbar * nbar.transpose();
+		}
+		// 更新相关顶点的Q
+		vertexQ[v1].setZero();
+		for (auto vfIter = mesh.vf_begin(v1); vfIter.is_valid(); vfIter++)
+		{
+			vertexQ[v1] += faceQ[*vfIter];
+		}
+		for (auto vvIter = mesh.vv_begin(v1); vvIter.is_valid(); vvIter++)
+		{
+			vertexQ[*vvIter].setZero();
+			for (auto vfIter = mesh.vf_begin(*vvIter); vfIter.is_valid(); vfIter++)
+			{
+				vertexQ[*vvIter] += faceQ[*vfIter];
+			}
+		}
+		// 更新相关边的Q，并计算Error，更新其在堆中的值和位置
+		for (auto vvIter = mesh.vv_begin(v1); vvIter.is_valid(); vvIter++)
+		{
+			for (auto veIter = mesh.ve_begin(*vvIter); veIter.is_valid(); veIter++)
+			{
+				edgeQ[*veIter] = vertexQ[(*veIter).v0()] + vertexQ[(*veIter).v1()];
+				double error = 0;
+				CalcError(edgeQ[*veIter], vbar[*veIter], error);
+				mh.set_value(*veIter, error);
+			}
+		}
+	}
+}
+
+void MeshTools::minHeap::make_heap(void)
+{
+	// 已有n个元素位于 heap[1,...,n]中，初始化为堆
+	for (int i = 1; i <= heap_size; i++)
+	{
+		pos[heap[i].eh] = i;
+	}
+	for (int i = heap_size >> 1; i > 0; i--)
+	{
+		down_move(i);
+	}
+}
+
+double MeshTools::minHeap::min_value(void)
+{
+	return heap[1].error;
+}
+
+MeshTools::minHeap::elem MeshTools::minHeap::extract_min(void)
+{
+	elem res = heap[1];
+	pos[heap[1].eh] = -1;
+	heap[1] = heap[heap_size];
+	heap_size -= 1;
+	down_move(1);
+	return res;
+}
+
+void MeshTools::minHeap::set_value(OpenMesh::SmartEdgeHandle eh, double new_value)
+{
+	double old_value = heap[pos[eh]].error;
+	heap[pos[eh]].error = new_value;
+	if (new_value < old_value)
+	{
+		up_move(pos[eh]);
+	}
+	else
+	{
+		down_move(pos[eh]);
+	}
+}
+
+void MeshTools::minHeap::delete_elem(OpenMesh::SmartEdgeHandle eh)
+{
+	set_value(eh, -INFINITY);
+	extract_min();
+}
+
+void MeshTools::minHeap::up_move(int idx)
+{
+	// 将指定元素向根节点方向调整，使其满足二叉堆性质
+	heap[0] = heap[idx];
+	int p = parent(idx);
+	while (p > 0 && less(heap[0], heap[p]))
+	{
+		heap[idx] = heap[p];
+		pos[heap[idx].eh] = idx;
+		idx = p;
+		p = parent(idx);
+	}
+	heap[idx] = heap[0];
+	pos[heap[idx].eh] = idx;
+}
+
+void MeshTools::minHeap::down_move(int idx)
+{
+	// 将指定元素向叶节点方向调整，使其满足二叉堆性质
+	heap[0] = heap[idx];
+	while (idx <= (heap_size >> 1))
+	{
+		int minIdx = idx;
+		int lc = leftc(idx);
+		int rc = rightc(idx);
+		if (less(heap[lc], heap[0]))
+		{
+			if (rc <= heap_size && less(heap[rc], heap[lc]))
+			{
+				minIdx = rc;
+			}
+			else
+			{
+				minIdx = lc;
+			}
+		}
+		else if (rc <= heap_size && less(heap[rc], heap[0]))
+		{
+			minIdx = rc;
+		}
+
+		if (minIdx != idx)
+		{
+			heap[idx] = heap[minIdx];
+			pos[heap[idx].eh] = idx;
+			idx = minIdx;
+		}
+		else
+		{
+			break;
+		}
+	}
+	heap[idx] = heap[0];
+	pos[heap[idx].eh] = idx;
 }

@@ -152,6 +152,13 @@ void MeshViewerWidget::PrintMeshInfo(void)
 	std::cout << "  Diag length of BBox: " << (ptMax - ptMin).norm() << std::endl;
 }
 
+void MeshViewerWidget::Simplify(int Nv, double minCost)
+{
+	MeshTools::Simplify(mesh, Nv, minCost);
+	UpdateMesh();
+	update();
+}
+
 void MeshViewerWidget::DrawScene(void)
 {
 	glMatrixMode(GL_PROJECTION);
