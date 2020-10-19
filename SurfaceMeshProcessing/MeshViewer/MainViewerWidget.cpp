@@ -30,6 +30,7 @@ void MainViewerWidget::CreateParamWidget(void)
 {
 	meshparamwidget = new MeshParamWidget();
 	connect(meshparamwidget, SIGNAL(PrintInfoSignal()), meshviewerwidget, SLOT(PrintMeshInfo()));
+	connect(meshparamwidget, SIGNAL(ShowPVFSignal()), meshviewerwidget, SLOT(ShowPolyVectorField()));
 }
 
 void MainViewerWidget::CreateViewerDialog(void)

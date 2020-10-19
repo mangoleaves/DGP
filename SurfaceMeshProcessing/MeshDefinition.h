@@ -1,5 +1,15 @@
 #pragma once
+#include <iostream>
+#include <vector>
+#include <cmath>
 #include <OpenMesh/Core/Mesh/TriMesh_ArrayKernelT.hh>
+#include <OpenMesh/Core/IO/MeshIO.hh>
+#include <OpenMesh/Core/Utils/PropertyManager.hh>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <Eigen/EigenValues>
+#include <igl/eigs.h>
+#include <igl/speye.h>
 #ifdef _DEBUG
 #pragma comment(lib, "OpenMeshCored.lib")
 #pragma comment(lib, "OpenMeshToolsd.lib")

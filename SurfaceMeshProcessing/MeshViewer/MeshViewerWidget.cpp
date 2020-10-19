@@ -152,6 +152,17 @@ void MeshViewerWidget::PrintMeshInfo(void)
 	std::cout << "  Diag length of BBox: " << (ptMax - ptMin).norm() << std::endl;
 }
 
+void MeshViewerWidget::ShowPolyVectorField(void)
+{
+	Eigen::SparseMatrix<std::complex<double>> Afull;
+	Eigen::VectorXcd polyVectorField;
+	PolyVectorField::CalcBase(mesh);
+	PolyVectorField::Precompute(mesh, 4, Afull);
+	PolyVectorField::CalcField(mesh, 4, Afull, polyVectorField);
+	PolyVectorField::ShowField(mesh, 4, polyVectorField);
+	update();
+}
+
 void MeshViewerWidget::DrawScene(void)
 {
 	glMatrixMode(GL_PROJECTION);

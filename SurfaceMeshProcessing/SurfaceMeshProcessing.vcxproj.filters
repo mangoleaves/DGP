@@ -41,6 +41,9 @@
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
       <ParseFiles>true</ParseFiles>
     </Filter>
+    <Filter Include="PolyVectorField">
+      <UniqueIdentifier>{d5046dc4-bad2-46a0-bf76-9e7560ebdda8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GeneratedFiles\Debug\moc_surfacemeshprocessing.cpp">
@@ -106,6 +109,9 @@
     <ClCompile Include="MeshParamWidget.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="PolyVectorField\PolyVectorField.cpp">
+      <Filter>PolyVectorField</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="surfacemeshprocessing.qrc">
@@ -133,6 +139,9 @@
   <ItemGroup>
     <ClInclude Include="MeshDefinition.h">
       <Filter>MeshViewer</Filter>
+    </ClInclude>
+    <ClInclude Include="PolyVectorField\PolyVectorField.h">
+      <Filter>PolyVectorField</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

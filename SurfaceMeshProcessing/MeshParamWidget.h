@@ -16,10 +16,11 @@ private:
 	void CreateLayout(void);
 signals:
 	void PrintInfoSignal();
+	void ShowPVFSignal();
 private:
 	QTabWidget *twParam;
 	QWidget *wParam;
 	QScrollArea *saParam;
 	QPushButton *pbPrintInfo;
-
+	QPushButton* showPVF;
 };

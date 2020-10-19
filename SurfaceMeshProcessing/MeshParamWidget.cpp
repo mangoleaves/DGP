@@ -15,9 +15,12 @@ void MeshParamWidget::CreateTabWidget(void)
 {
 	pbPrintInfo = new QPushButton(tr("Print Mesh Info"));
 	connect(pbPrintInfo, SIGNAL(clicked()), SIGNAL(PrintInfoSignal()));
+	showPVF = new QPushButton(tr("Show PolyVector Field"));
+	connect(showPVF, SIGNAL(clicked()), SIGNAL(ShowPVFSignal()));
 
 	QVBoxLayout *layout = new QVBoxLayout();
 	layout->addWidget(pbPrintInfo);
+	layout->addWidget(showPVF);
 	layout->addStretch();
 	wParam = new QWidget();
 	wParam->setLayout(layout);
