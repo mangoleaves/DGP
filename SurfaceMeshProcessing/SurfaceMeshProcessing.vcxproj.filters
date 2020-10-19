@@ -41,6 +41,9 @@
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
       <ParseFiles>true</ParseFiles>
     </Filter>
+    <Filter Include="Remeshing">
+      <UniqueIdentifier>{9ea10951-32cf-46d3-ab9c-ff993cbae8f1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GeneratedFiles\Debug\moc_surfacemeshprocessing.cpp">
@@ -106,6 +109,9 @@
     <ClCompile Include="MeshParamWidget.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="Remeshing\Remeshing.cpp">
+      <Filter>Remeshing</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="surfacemeshprocessing.qrc">
@@ -133,6 +139,9 @@
   <ItemGroup>
     <ClInclude Include="MeshDefinition.h">
       <Filter>MeshViewer</Filter>
+    </ClInclude>
+    <ClInclude Include="Remeshing\Remeshing.h">
+      <Filter>Remeshing</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

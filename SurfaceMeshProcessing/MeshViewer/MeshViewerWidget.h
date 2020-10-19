@@ -2,6 +2,7 @@
 #include <QString>
 #include "QGLViewerWidget.h"
 #include "MeshDefinition.h"
+#include "Remeshing/Remeshing.h"
 
 class MeshViewerWidget : public QGLViewerWidget
 {
@@ -26,6 +27,8 @@ signals:
 	void LoadMeshOKSignal(bool, QString);
 public slots:
 	void PrintMeshInfo(void);
+	void Remeshing(double targetLength);
+	void ShowOrigin(void);
 protected:
 	virtual void DrawScene(void) override;
 	void DrawSceneMesh(void);
@@ -41,6 +44,7 @@ private:
 	void DrawBoundary(void) const;
 protected:
 	Mesh mesh;
+	Mesh originMesh;
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;

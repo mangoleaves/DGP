@@ -16,10 +16,16 @@ private:
 	void CreateLayout(void);
 signals:
 	void PrintInfoSignal();
+	void RemeshingSignal(double targetLength);
+	void ShowOriginSignal();
+private slots:
+	void EmitRemeshingSignal(void);
 private:
 	QTabWidget *twParam;
 	QWidget *wParam;
 	QScrollArea *saParam;
 	QPushButton *pbPrintInfo;
-
+	QLineEdit* lengthLE;
+	QPushButton* remeshingBtn;
+	QPushButton* showOriginBtn;
 };

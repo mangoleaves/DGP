@@ -28,6 +28,7 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		QFileInfo fi(strMeshFileName);
 		strMeshPath = fi.path();
 		strMeshBaseName = fi.baseName();
+		MeshTools::Reassign(mesh, originMesh);
 		UpdateMesh();
 		update();
 		return true;
@@ -150,6 +151,20 @@ void MeshViewerWidget::PrintMeshInfo(void)
 	std::cout << "  Y: [" << ptMin[1] << ", " << ptMax[1] << "]\n";
 	std::cout << "  Z: [" << ptMin[2] << ", " << ptMax[2] << "]\n";
 	std::cout << "  Diag length of BBox: " << (ptMax - ptMin).norm() << std::endl;
+}
+
+void MeshViewerWidget::Remeshing(double targetLength)
+{
+	Remeshing::DoRemeshing(mesh, targetLength);
+	UpdateMesh();
+	update();
+}
+
+void MeshViewerWidget::ShowOrigin(void)
+{
+	MeshTools::Reassign(originMesh, mesh);
+	UpdateMesh();
+	update();
 }
 
 void MeshViewerWidget::DrawScene(void)
