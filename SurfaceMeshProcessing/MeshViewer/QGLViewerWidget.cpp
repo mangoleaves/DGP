@@ -316,7 +316,7 @@ void QGLViewerWidget::mouseReleaseEvent(QMouseEvent*  _event)
 void QGLViewerWidget::wheelEvent(QWheelEvent* _event)
 {
 	// Use the mouse wheel to zoom in/out
-	double d = -_event->delta() / 120.0 * 0.05 * radius;
+	double d = -_event->angleDelta().y() / 120.0 * 0.05 * radius;
 	Translate(OpenMesh::Vec3d(0.0, 0.0, d));
 	update();
 }
