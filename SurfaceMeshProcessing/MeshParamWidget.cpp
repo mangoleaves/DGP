@@ -15,9 +15,12 @@ void MeshParamWidget::CreateTabWidget(void)
 {
 	pbPrintInfo = new QPushButton(tr("Print Mesh Info"));
 	connect(pbPrintInfo, SIGNAL(clicked()), SIGNAL(PrintInfoSignal()));
+	triBtn = new QPushButton(tr("Delaunay Triangulation"));
+	connect(triBtn, SIGNAL(clicked()), SIGNAL(TriSignal()));
 
 	QVBoxLayout *layout = new QVBoxLayout();
 	layout->addWidget(pbPrintInfo);
+	layout->addWidget(triBtn);
 	layout->addStretch();
 	wParam = new QWidget();
 	wParam->setLayout(layout);

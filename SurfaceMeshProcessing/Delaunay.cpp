@@ -22,7 +22,51 @@ void Delaunay::CalcCircumcenter(Mesh& mesh, OpenMesh::SmartFaceHandle fh, Mesh::
 	cc[1] = solve(1);
 }
 
+void Delaunay::CalcCircumcenter(Mesh& mesh, OpenMesh::SmartFaceHandle fh, Mesh::Point& cc, double& radius)
+{
+	CalcCircumcenter(mesh, fh, cc);
+	radius = (cc - mesh.point(fh.halfedge().from())).norm();
+}
+
 void Delaunay::Lowson(Mesh& mesh)
 {
+	// 标记一条边是否需要检查其是否满足空圆性质
+	auto needCheck = OpenMesh::makeTemporaryProperty<OpenMesh::EdgeHandle, bool>(mesh);
+	for (auto eh : mesh.edges())
+	{
+		needCheck[eh] = true;
+	}
+	// 检查每条边相邻的两个圆是否满足空圆性质
+	bool hasCheck;
+	do
+	{
+		hasCheck = false;
+		for (auto eh : mesh.edges())
+		{
+			if (needCheck[eh])
+			{
+				hasCheck = true;
+				// 计算相邻的一面的外心cc和半径radius
+				Mesh::Point cc;
+				double radius;
+				CalcCircumcenter(mesh, eh.h0().face(), cc, radius);
+				// 若第4个点和cc的距离小于radius，则需要flip
+				if ((mesh.point(eh.h1().next().to()) - cc).norm() < radius)
+				{
+					mesh.flip(eh);
+					// 受影响的边为外围的4条，标记为needCheck
+					needCheck[eh.h0().next().edge()] = true;
+					needCheck[eh.h0().next().next().edge()] = true;
+					needCheck[eh.h1().next().edge()] = true;
+					needCheck[eh.h1().next().next().edge()] = true;
+				}
+				needCheck[eh] = false;
+			}
+		}
+	} while (hasCheck);
+}
 
+void Delaunay::DelaunayTriangulation(Mesh& mesh)
+{
+	Lowson(mesh);
 }

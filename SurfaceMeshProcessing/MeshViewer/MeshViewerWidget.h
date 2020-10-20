@@ -2,6 +2,7 @@
 #include <QString>
 #include "QGLViewerWidget.h"
 #include "MeshDefinition.h"
+#include "Delaunay.h"
 
 class MeshViewerWidget : public QGLViewerWidget
 {
@@ -26,6 +27,7 @@ signals:
 	void LoadMeshOKSignal(bool, QString);
 public slots:
 	void PrintMeshInfo(void);
+	void Triangulation(void);
 protected:
 	virtual void DrawScene(void) override;
 	void DrawSceneMesh(void);
