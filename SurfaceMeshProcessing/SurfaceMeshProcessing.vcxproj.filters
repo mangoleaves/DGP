@@ -41,6 +41,9 @@
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
       <ParseFiles>true</ParseFiles>
     </Filter>
+    <Filter Include="Delaunay">
+      <UniqueIdentifier>{acae735a-d5d1-4e41-be1b-0fdcc7febe27}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GeneratedFiles\Debug\moc_surfacemeshprocessing.cpp">
@@ -106,6 +109,9 @@
     <ClCompile Include="MeshParamWidget.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="Delaunay.cpp">
+      <Filter>Delaunay</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="surfacemeshprocessing.qrc">
@@ -133,6 +139,9 @@
   <ItemGroup>
     <ClInclude Include="MeshDefinition.h">
       <Filter>MeshViewer</Filter>
+    </ClInclude>
+    <ClInclude Include="Delaunay.h">
+      <Filter>Delaunay</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
