@@ -41,6 +41,9 @@
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
       <ParseFiles>true</ParseFiles>
     </Filter>
+    <Filter Include="Lloyd">
+      <UniqueIdentifier>{b5cf76c1-4acd-4669-bc6a-d378b348352e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GeneratedFiles\Debug\moc_surfacemeshprocessing.cpp">
@@ -106,6 +109,9 @@
     <ClCompile Include="MeshParamWidget.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="Lloyd\Lloyd.cpp">
+      <Filter>Lloyd</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="surfacemeshprocessing.qrc">
@@ -133,6 +139,9 @@
   <ItemGroup>
     <ClInclude Include="MeshDefinition.h">
       <Filter>MeshViewer</Filter>
+    </ClInclude>
+    <ClInclude Include="Lloyd\Lloyd.h">
+      <Filter>Lloyd</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -124,6 +124,7 @@
     <ClCompile Include="GeneratedFiles\Release\moc_surfacemeshprocessing.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="Lloyd\Lloyd.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MeshDefinition.cpp" />
     <ClCompile Include="MeshParamWidget.cpp" />
@@ -146,6 +147,7 @@
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Lloyd\Lloyd.h" />
     <ClInclude Include="MeshDefinition.h" />
     <CustomBuild Include="MeshParamWidget.h">
       <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(QTDIR)\bin\moc.exe;%(FullPath)</AdditionalInputs>
