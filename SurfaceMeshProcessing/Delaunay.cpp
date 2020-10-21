@@ -43,7 +43,7 @@ void Delaunay::Lowson(Mesh& mesh)
 		hasCheck = false;
 		for (auto eh : mesh.edges())
 		{
-			if (needCheck[eh])
+			if (needCheck[eh] && !eh.is_boundary())
 			{
 				hasCheck = true;
 				// 计算相邻的一面的外心cc和半径radius
@@ -51,7 +51,7 @@ void Delaunay::Lowson(Mesh& mesh)
 				double radius;
 				CalcCircumcenter(mesh, eh.h0().face(), cc, radius);
 				// 若第4个点和cc的距离小于radius，则需要flip
-				if ((mesh.point(eh.h1().next().to()) - cc).norm() < radius)
+				if ((mesh.point(eh.h1().next().to()) - cc).norm() < radius && mesh.is_flip_ok(eh))
 				{
 					mesh.flip(eh);
 					// 受影响的边为外围的4条，标记为needCheck
@@ -66,7 +66,33 @@ void Delaunay::Lowson(Mesh& mesh)
 	} while (hasCheck);
 }
 
+void Delaunay::OptimalPosition(Mesh& mesh)
+{
+	for (auto vh : mesh.vertices())
+	{
+		if (!vh.is_boundary())
+		{
+			double areaSum = 0.0;
+			Mesh::Point pstar(0, 0, 0);
+			for (auto vfIter = mesh.vf_begin(vh); vfIter.is_valid(); vfIter++)
+			{
+				Mesh::Point cc;
+				CalcCircumcenter(mesh, *vfIter, cc);
+				double areaT = mesh.calc_face_area(*vfIter);
+				pstar += areaT * cc;
+				areaSum += areaT;
+			}
+			pstar /= areaSum;
+			mesh.set_point(vh, pstar);
+		}
+	}
+}
+
 void Delaunay::DelaunayTriangulation(Mesh& mesh)
 {
-	Lowson(mesh);
+	for (int i = 0; i < 10; i++)
+	{
+		OptimalPosition(mesh);
+		Lowson(mesh);
+	}
 }

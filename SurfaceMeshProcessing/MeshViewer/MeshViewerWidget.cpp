@@ -155,7 +155,7 @@ void MeshViewerWidget::PrintMeshInfo(void)
 void MeshViewerWidget::Triangulation(void)
 {
 	Delaunay::DelaunayTriangulation(mesh);
-	UpdateMesh();
+	//UpdateMesh();
 	update();
 }
 
