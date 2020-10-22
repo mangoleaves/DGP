@@ -30,6 +30,7 @@ void MainViewerWidget::CreateParamWidget(void)
 {
 	meshparamwidget = new MeshParamWidget();
 	connect(meshparamwidget, SIGNAL(PrintInfoSignal()), meshviewerwidget, SLOT(PrintMeshInfo()));
+	connect(meshparamwidget, SIGNAL(DoLloydSignal(int, int)), meshviewerwidget, SLOT(DoLloyd(int, int)));
 }
 
 void MainViewerWidget::CreateViewerDialog(void)

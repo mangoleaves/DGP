@@ -28,6 +28,7 @@ bool MeshViewerWidget::LoadMesh(const std::string & filename)
 		QFileInfo fi(strMeshFileName);
 		strMeshPath = fi.path();
 		strMeshBaseName = fi.baseName();
+		isDoLloyd = false;
 		UpdateMesh();
 		update();
 		return true;
@@ -152,6 +153,15 @@ void MeshViewerWidget::PrintMeshInfo(void)
 	std::cout << "  Diag length of BBox: " << (ptMax - ptMin).norm() << std::endl;
 }
 
+void MeshViewerWidget::DoLloyd(int K, int nIter)
+{
+	Lloyd lld(mesh, K);
+	lld.DoLloyd(mesh, nIter);
+	isDoLloyd = true;
+	UpdateMesh();
+	update();
+}
+
 void MeshViewerWidget::DrawScene(void)
 {
 	glMatrixMode(GL_PROJECTION);
@@ -227,7 +237,7 @@ void MeshViewerWidget::DrawWireframe(void) const
 	glEnd();
 }
 
-void MeshViewerWidget::DrawHiddenLines() const
+void MeshViewerWidget::DrawHiddenLines()
 {
 	glLineWidth(1.0);
 	float backcolor[4];
@@ -252,13 +262,11 @@ void MeshViewerWidget::DrawHiddenLines() const
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
-void MeshViewerWidget::DrawFlatLines(void) const
+void MeshViewerWidget::DrawFlatLines(void)
 {
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.5f, 2.0f);
 	glShadeModel(GL_FLAT);
-	//glColor3d(0.8, 0.8, 0.8);
-	glColor3d(1.0, 1.0, 1.0);
 	DrawFlat();
 	glDisable(GL_POLYGON_OFFSET_FILL);
 	if (glIsEnabled(GL_LIGHTING))
@@ -273,18 +281,63 @@ void MeshViewerWidget::DrawFlatLines(void) const
 	}
 }
 
-void MeshViewerWidget::DrawFlat(void) const
+void MeshViewerWidget::DrawFlat(void)
 {
-	glBegin(GL_TRIANGLES);
-	for (const auto& fh : mesh.faces())
+	glColor3d(1.0, 1.0, 1.0);
+	if (isDoLloyd)
 	{
-		glNormal3dv(mesh.normal(fh).data());
-		for (const auto& fvh : mesh.fv_range(fh))
+		auto partition = OpenMesh::getProperty<OpenMesh::FaceHandle, int>(mesh, "partition");
+		// colors
+		std::vector<double*> colors;
+		double* color;
+		color = new double[3];
+		color[0] = 1.0; color[1] = 0.0; color[2] = 0.0;
+		colors.push_back(color);
+		color = new double[3];
+		color[0] = 0.0; color[1] = 1.0; color[2] = 0.0;
+		colors.push_back(color);
+		color = new double[3];
+		color[0] = 0.0; color[1] = 0.0; color[2] = 1.0;
+		colors.push_back(color);
+		color = new double[3];
+		color[0] = 0.5; color[1] = 0.2; color[2] = 0.2;
+		colors.push_back(color);
+		color = new double[3];
+		color[0] = 0.8; color[1] = 0.8; color[2] = 0.8;
+		colors.push_back(color);
+		color = new double[3];
+		color[0] = 0.0; color[1] = 1.0; color[2] = 1.0;
+		colors.push_back(color);
+		color = new double[3];
+		color[0] = 1.0; color[1] = 0.0; color[2] = 1.0;
+		colors.push_back(color);
+		color = new double[3];
+		color[0] = 1.0; color[1] = 1.0; color[2] = 0.0;
+		colors.push_back(color);
+		// draw
+		for (const auto& fh : mesh.faces())
 		{
-			glVertex3dv(mesh.point(fvh).data());
+			glColor3dv(colors[partition[fh] % 8]);
+			glBegin(GL_TRIANGLES);
+			glNormal3dv(mesh.normal(fh).data());
+			for (const auto& fvh : mesh.fv_range(fh))
+			{
+				glVertex3dv(mesh.point(fvh).data());
+			}
+			glEnd();
 		}
 	}
-	glEnd();
+	else
+	{
+		for (const auto& fh : mesh.faces())
+		{
+			glNormal3dv(mesh.normal(fh).data());
+			for (const auto& fvh : mesh.fv_range(fh))
+			{
+				glVertex3dv(mesh.point(fvh).data());
+			}
+		}
+	}
 }
 
 void MeshViewerWidget::DrawSmooth(void) const

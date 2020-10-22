@@ -2,6 +2,7 @@
 #include <QString>
 #include "QGLViewerWidget.h"
 #include "MeshDefinition.h"
+#include "Lloyd/Lloyd.h"
 
 class MeshViewerWidget : public QGLViewerWidget
 {
@@ -26,6 +27,7 @@ signals:
 	void LoadMeshOKSignal(bool, QString);
 public slots:
 	void PrintMeshInfo(void);
+	void DoLloyd(int K, int nIter);
 protected:
 	virtual void DrawScene(void) override;
 	void DrawSceneMesh(void);
@@ -33,14 +35,15 @@ protected:
 private:
 	void DrawPoints(void) const;
 	void DrawWireframe(void) const;
-	void DrawHiddenLines(void) const;
-	void DrawFlatLines(void) const;
-	void DrawFlat(void) const;
+	void DrawHiddenLines(void);
+	void DrawFlatLines(void);
+	void DrawFlat(void);
 	void DrawSmooth(void) const;
 	void DrawBoundingBox(void) const;
 	void DrawBoundary(void) const;
 protected:
 	Mesh mesh;
+	bool isDoLloyd;
 	QString strMeshFileName;
 	QString strMeshBaseName;
 	QString strMeshPath;

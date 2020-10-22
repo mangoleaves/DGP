@@ -10,7 +10,7 @@ public:
 	Lloyd() = default;
 	Lloyd(Mesh& m, int k) :mesh(m), K(k) {}
 
-	void DoLloyd();
+	void DoLloyd(Mesh& outputMesh, int nIter);
 private:
 	// types
 	typedef struct pxy {
@@ -42,21 +42,18 @@ private:
 		}
 	};
 
-	typedef std::priority_queue<QueueElem, compare> TriangleQueue;
+	typedef std::priority_queue<QueueElem, std::vector<QueueElem>, compare> TriangleQueue;
 
 	// private data
 	Mesh mesh;
-	OpenMesh::PropertyManager<OpenMesh::FPropHandleT<MeshTraits::Normal>, int>* centroid;
-	OpenMesh::PropertyManager<OpenMesh::FPropHandleT<double>, int>* area;
 	int K;
 	Proxys proxys;
 	SeedTriangles seedtris;
-	OpenMesh::PropertyManager<OpenMesh::FPropHandleT<int>, int>* partition;
 
 	// private functions
-	double CalcError(OpenMesh::FaceHandle fh, Proxy proxy);
+	double CalcError(OpenMesh::SmartFaceHandle& fh, Proxy& proxy);
 	void InitialSeeding();
-	void GeometryPartition();
+	void GeometryPartitioning();
 	bool ProxyFitting();
 	void GenerateSeeds();
 };
